@@ -5,14 +5,14 @@
   "repo": "https://github.com/manzamario/padel-match",
   "autoDeploy": "yes",
   "branch": "main",
-  "runtime": "docker",
+  "runtime": "node",
   "serviceDetails": {
-    "env": "docker",
+    "env": "node",
     "plan": "free",
+    "healthCheckPath": "",
     "envSpecificDetails": {
-      "dockerCommand": "",
-      "dockerContext": ".",
-      "dockerfilePath": "./Dockerfile"
+      "buildCommand": "npm install",
+      "startCommand": "npm start"
     },
     "envVars": [
       {

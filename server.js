@@ -13,6 +13,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'running',
+    mongo: mongoose.connection.readyState === 1 ? 'connected' : 'connecting',
+    uptime: Math.floor(process.uptime())
+  });
+});
+
 // Middleware: chequea suspensiones vencidas
 app.use((req, res, next) => {
   db.checkAndUnsuspend().catch(() => {});
