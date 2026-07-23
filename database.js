@@ -1,179 +1,160 @@
-const fs = require('fs');
-const path = require('path');
+const Player = require('./models/Player');
+const Invitation = require('./models/Invitation');
+const Rule = require('./models/Rule');
 
-const DB_PATH = path.join(__dirname, 'data.json');
+const DEFAULT_RULES = [
+  '1. Mantené actualizado tu estado de disponibilidad. Es obligatorio marcar si estás disponible o no antes de aparecer en el listado.',
+  '2. Respondé las invitaciones en menos de 24 horas. Ignorar o dejar en visto se considera falta.',
+  '3. Si rechazás una invitación, se registra automáticamente como rechazo.',
+  '4. Acumular 3 rechazos = suspensión automática por 1 mes. Quedás cesante.',
+  '5. Durante la suspensión no aparecés en el listado ni podés recibir invitaciones.',
+  '6. Si reincidís después de la suspensión, la siguiente será de 3 meses.',
+  '7. Las invitaciones vencen automáticamente a las 24 horas si no se responden, contando como rechazo.',
+  '8. Mantené el respeto. Cualquier falta de respeto puede resultar en expulsión permanente.',
+  '9. Si no contestás o dejás en visto, recibirás una notificación de incumplimiento de normas.'
+];
 
-function readDb() {
-  try {
-    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-  } catch {
-    return { players: [], invitations: [], rules: [] };
+async function ensureRules() {
+  const count = await Rule.countDocuments();
+  if (count === 0) {
+    await Rule.insertMany(DEFAULT_RULES.map((content, i) => ({ content, order: i + 1 })));
   }
 }
-
-function writeDb(data) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-}
-
-// --- INIT ---
-function ensureRules() {
-  const db = readDb();
-  if (db.rules.length === 0) {
-    db.rules = [
-      { id: 1, content: '1. Mantené actualizado tu estado de disponibilidad. Es obligatorio marcar si estás disponible o no antes de aparecer en el listado.' },
-      { id: 2, content: '2. Respondé las invitaciones en menos de 24 horas. Ignorar o dejar en visto se considera falta.' },
-      { id: 3, content: '3. Si rechazás una invitación, se registra automáticamente como rechazo.' },
-      { id: 4, content: '4. Acumular 3 rechazos = suspensión automática por 1 mes. Quedás cesante.' },
-      { id: 5, content: '5. Durante la suspensión no aparecés en el listado ni podés recibir invitaciones.' },
-      { id: 6, content: '6. Si reincidís después de la suspensión, la siguiente será de 3 meses.' },
-      { id: 7, content: '7. Las invitaciones vencen automáticamente a las 24 horas si no se responden, contando como rechazo.' },
-      { id: 8, content: '8. Mantené el respeto. Cualquier falta de respeto puede resultar en expulsión permanente.' },
-      { id: 9, content: '9. Si no contestás o dejás en visto, recibirás una notificación de incumplimiento de normas.' }
-    ];
-    writeDb(db);
-  }
-}
-ensureRules();
 
 // --- PLAYERS ---
-function createPlayer(id, name, phone, category) {
-  const db = readDb();
-  const player = { id, name, phone, category, available: true, rejections: 0, suspended: false, suspendedUntil: null, warnings: 0, createdAt: new Date().toISOString() };
-  db.players.push(player);
-  writeDb(db);
-  return player;
+async function createPlayer(id, name, phone, category) {
+  const p = await Player.create({ _id: id, name, phone, category });
+  return p.toObject();
 }
 
-function getPlayer(id) {
-  return readDb().players.find(p => p.id === id) || null;
+async function getPlayer(id) {
+  const p = await Player.findById(id);
+  return p ? p.toObject() : null;
 }
 
-function findPlayerByPhone(phone) {
-  return readDb().players.find(p => p.phone === phone) || null;
+async function findPlayerByPhone(phone) {
+  const p = await Player.findOne({ phone });
+  return p ? p.toObject() : null;
 }
 
-function getAllPlayers() {
-  return readDb().players;
+async function getAllPlayers() {
+  const players = await Player.find().sort({ name: 1 });
+  return players.map(p => p.toObject());
 }
 
-function toggleAvailability(id, available) {
-  const db = readDb();
-  const p = db.players.find(x => x.id === id);
-  if (!p) return null;
-  p.available = available;
-  writeDb(db);
-  return p;
+async function toggleAvailability(id, available) {
+  const p = await Player.findByIdAndUpdate(id, { available }, { new: true });
+  return p ? p.toObject() : null;
 }
 
-function addRejection(id) {
-  const db = readDb();
-  const p = db.players.find(x => x.id === id);
+async function addRejection(id) {
+  const p = await Player.findById(id);
   if (!p) return null;
   p.rejections = (p.rejections || 0) + 1;
   if (p.rejections >= 3) {
-    const until = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const until = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     p.suspended = true;
     p.suspendedUntil = until;
     p.warnings = (p.warnings || 0) + 1;
   }
-  writeDb(db);
-  return p;
+  await p.save();
+  return p.toObject();
 }
 
-function checkAndUnsuspend() {
-  const db = readDb();
-  const now = new Date().toISOString();
-  let changed = false;
-  for (const p of db.players) {
-    if (p.suspended && p.suspendedUntil && p.suspendedUntil <= now) {
-      p.suspended = false;
-      p.suspendedUntil = null;
-      p.rejections = 0;
-      changed = true;
-    }
-  }
-  if (changed) writeDb(db);
+async function checkAndUnsuspend() {
+  await Player.updateMany(
+    { suspended: true, suspendedUntil: { $lte: new Date() } },
+    { $set: { suspended: false, suspendedUntil: null, rejections: 0 } }
+  );
 }
 
-function deletePlayer(id) {
-  const db = readDb();
-  db.players = db.players.filter(p => p.id !== id);
-  db.invitations = db.invitations.filter(i => i.fromPlayerId !== id && i.toPlayerId !== id);
-  writeDb(db);
+async function deletePlayer(id) {
+  await Invitation.deleteMany({ $or: [{ fromPlayer: id }, { toPlayer: id }] });
+  await Player.findByIdAndDelete(id);
+}
+
+async function resetPlayer(id) {
+  await Player.findByIdAndUpdate(id, { rejections: 0, suspended: false, suspendedUntil: null });
 }
 
 // --- INVITATIONS ---
-function createInvitation(id, fromId, toId) {
-  const db = readDb();
-  const inv = { id, fromPlayerId: fromId, toPlayerId: toId, status: 'pending', createdAt: new Date().toISOString(), respondedAt: null };
-  db.invitations.push(inv);
-  writeDb(db);
-  return inv;
+async function createInvitation(id, fromId, toId) {
+  const inv = await Invitation.create({ _id: id, fromPlayer: fromId, toPlayer: toId });
+  return inv.toObject();
 }
 
-function getInvitation(id) {
-  return readDb().invitations.find(i => i.id === id) || null;
+async function getInvitation(id) {
+  const inv = await Invitation.findById(id);
+  return inv ? inv.toObject() : null;
 }
 
-function getPendingInvitationsForPlayer(playerId) {
-  autoExpire();
-  const db = readDb();
-  return db.invitations
-    .filter(i => i.toPlayerId === playerId && i.status === 'pending')
-    .map(i => {
-      const from = db.players.find(p => p.id === i.fromPlayerId);
-      return { ...i, fromName: from ? from.name : 'Desconocido', fromPhone: from ? from.phone : '', fromCategory: from ? from.category : '' };
-    })
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+async function getPendingInvitationsForPlayer(playerId) {
+  await autoExpire();
+  const invs = await Invitation.find({ toPlayer: playerId, status: 'pending' })
+    .populate('fromPlayer', 'name phone category')
+    .sort({ createdAt: -1 });
+  return invs.map(i => ({
+    id: i._id.toString(),
+    fromPlayerId: i.fromPlayer._id.toString(),
+    fromName: i.fromPlayer.name,
+    fromPhone: i.fromPlayer.phone,
+    fromCategory: i.fromPlayer.category,
+    status: i.status,
+    createdAt: i.createdAt
+  }));
 }
 
-function getSentInvitations(playerId) {
-  const db = readDb();
-  return db.invitations
-    .filter(i => i.fromPlayerId === playerId)
-    .map(i => {
-      const to = db.players.find(p => p.id === i.toPlayerId);
-      return { ...i, toName: to ? to.name : 'Desconocido' };
-    })
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+async function getSentInvitations(playerId) {
+  const invs = await Invitation.find({ fromPlayer: playerId })
+    .populate('toPlayer', 'name')
+    .sort({ createdAt: -1 });
+  return invs.map(i => ({
+    id: i._id.toString(),
+    toName: i.toPlayer ? i.toPlayer.name : 'Desconocido',
+    status: i.status,
+    createdAt: i.createdAt,
+    respondedAt: i.respondedAt
+  }));
 }
 
-function respondInvitation(id, status) {
-  const db = readDb();
-  const inv = db.invitations.find(i => i.id === id);
+async function respondInvitation(id, status) {
+  const inv = await Invitation.findById(id);
   if (!inv || inv.status !== 'pending') return null;
   inv.status = status;
-  inv.respondedAt = new Date().toISOString();
-  writeDb(db);
+  inv.respondedAt = new Date();
+  await inv.save();
   if (status === 'rejected') {
-    addRejection(inv.toPlayerId);
+    await addRejection(inv.toPlayer.toString());
   }
-  return inv;
+  return inv.toObject();
 }
 
-function autoExpire() {
-  const db = readDb();
-  const limit = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  let changed = false;
-  for (const inv of db.invitations) {
-    if (inv.status === 'pending' && inv.createdAt < limit) {
-      inv.status = 'rejected';
-      inv.respondedAt = new Date().toISOString();
-      changed = true;
-      addRejection(inv.toPlayerId);
-    }
+async function autoExpire() {
+  const limit = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const expired = await Invitation.find({ status: 'pending', createdAt: { $lt: limit } });
+  for (const inv of expired) {
+    inv.status = 'rejected';
+    inv.respondedAt = new Date();
+    await inv.save();
+    await addRejection(inv.toPlayer.toString());
   }
-  if (changed) writeDb(db);
+}
+
+async function getInvitationStats(playerId) {
+  const count = await Invitation.countDocuments({ toPlayer: playerId, status: 'pending' });
+  return { total: count };
 }
 
 // --- RULES ---
-function getRules() {
-  return readDb().rules;
+async function getRules() {
+  const rules = await Rule.find().sort({ order: 1 });
+  return rules.map(r => ({ id: r._id, content: r.content }));
 }
 
 module.exports = {
+  ensureRules,
   createPlayer, getPlayer, getAllPlayers, findPlayerByPhone,
-  toggleAvailability, addRejection, checkAndUnsuspend, deletePlayer,
+  toggleAvailability, addRejection, checkAndUnsuspend, deletePlayer, resetPlayer,
   createInvitation, getInvitation, getPendingInvitationsForPlayer, getSentInvitations,
-  respondInvitation, getRules
+  respondInvitation, getInvitationStats, getRules
 };
