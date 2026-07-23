@@ -1,0 +1,10 @@
+{
+  "serviceDetails": {
+    "envVars": [
+      {
+        "key": "MONGODB_URI",
+        "value": "mongodb://padel_user:PadelMatch2024@cluster0.ztty11j.mongodb.net:27017/padel-match?retryWrites=true&w=majority&ssl=true"
+      }
+    ]
+  }
+}

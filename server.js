@@ -7,7 +7,12 @@ const db = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/padel-match';
+const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_OPTIONS = {
+  serverSelectionTimeoutMS: 10000,
+  connectTimeoutMS: 10000,
+  socketTimeoutMS: 45000
+};
 
 app.use(cors());
 app.use(express.json());
@@ -166,20 +171,41 @@ app.get('*', (req, res) => {
 });
 
 // ─── START ──────────────────────────────────────────────
-async function connectMongo(retries = 10) {
-  for (let i = 1; i <= retries; i++) {
-    try {
-      await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
-      console.log('Conectado a MongoDB');
-      await db.ensureRules();
-      console.log('Reglas inicializadas');
-      return true;
-    } catch (err) {
-      console.log(`Intento ${i}/${retries} MongoDB falló: ${err.message}`);
-      if (i < retries) await new Promise(r => setTimeout(r, 3000));
+function srvToDirect(uri) {
+  if (!uri || !uri.startsWith('mongodb+srv://')) return uri;
+  const base = uri.replace('mongodb+srv://', 'mongodb://');
+  const atIdx = base.indexOf('@');
+  const qIdx = base.indexOf('?');
+  if (atIdx === -1) return uri;
+  const hostEnd = qIdx !== -1 ? qIdx : base.length;
+  const hostPart = base.slice(atIdx + 1, hostEnd);
+  const query = qIdx !== -1 ? base.slice(qIdx) : '';
+  const directHost = hostPart.replace(/\.mongodb\.net.*/, '.mongodb.net:27017');
+  return base.slice(0, atIdx + 1) + directHost + '/padel-match?ssl=true&authSource=admin';
+}
+
+async function connectMongo(retries = 5) {
+  const uris = [];
+  if (MONGODB_URI) uris.push(MONGODB_URI);
+  const direct = srvToDirect(MONGODB_URI);
+  if (direct && direct !== MONGODB_URI) uris.push(direct);
+
+  for (const uri of uris) {
+    for (let i = 1; i <= retries; i++) {
+      try {
+        console.log(`Intentando conectar (${i}/${retries}): ${uri.slice(0, 50)}...`);
+        await mongoose.connect(uri, MONGODB_OPTIONS);
+        console.log('Conectado a MongoDB');
+        await db.ensureRules();
+        console.log('Reglas inicializadas');
+        return true;
+      } catch (err) {
+        console.log(`Intento ${i}/${retries} falló: ${err.message}`);
+        if (i < retries) await new Promise(r => setTimeout(r, 3000));
+      }
     }
   }
-  console.error('No se pudo conectar a MongoDB después de varios intentos');
+  console.error('No se pudo conectar a MongoDB');
   return false;
 }
 
@@ -187,7 +213,6 @@ async function start() {
   app.listen(PORT, () => {
     console.log(`Servidor HTTP corriendo en puerto ${PORT}`);
   });
-  // No bloqueamos el inicio del server, conectamos a MongoDB en background
   connectMongo();
 }
 
