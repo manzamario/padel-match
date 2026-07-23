@@ -171,29 +171,16 @@ app.get('*', (req, res) => {
 });
 
 // ─── START ──────────────────────────────────────────────
-function srvToDirect(uri) {
-  if (!uri || !uri.startsWith('mongodb+srv://')) return uri;
-  const base = uri.replace('mongodb+srv://', 'mongodb://');
-  const atIdx = base.indexOf('@');
-  const qIdx = base.indexOf('?');
-  if (atIdx === -1) return uri;
-  const hostEnd = qIdx !== -1 ? qIdx : base.length;
-  const hostPart = base.slice(atIdx + 1, hostEnd);
-  const query = qIdx !== -1 ? base.slice(qIdx) : '';
-  const directHost = hostPart.replace(/\.mongodb\.net.*/, '.mongodb.net:27017');
-  return base.slice(0, atIdx + 1) + directHost + '/padel-match?ssl=true&authSource=admin';
-}
+const MONGO_DIRECT = 'mongodb://padel_user:PadelMatch2024@ac-erfscf9-shard-00-00.ztty11j.mongodb.net:27017,ac-erfscf9-shard-00-01.ztty11j.mongodb.net:27017,ac-erfscf9-shard-00-02.ztty11j.mongodb.net:27017/padel-match?ssl=true&replicaSet=atlas-11uadz-shard-0&authSource=admin';
 
 async function connectMongo(retries = 5) {
-  const uris = [];
-  if (MONGODB_URI) uris.push(MONGODB_URI);
-  const direct = srvToDirect(MONGODB_URI);
-  if (direct && direct !== MONGODB_URI) uris.push(direct);
+  const uris = [MONGO_DIRECT];
+  if (MONGODB_URI && MONGODB_URI !== MONGO_DIRECT) uris.push(MONGODB_URI);
 
   for (const uri of uris) {
     for (let i = 1; i <= retries; i++) {
       try {
-        console.log(`Intentando conectar (${i}/${retries}): ${uri.slice(0, 50)}...`);
+        console.log(`Conectando MongoDB (${i}/${retries})...`);
         await mongoose.connect(uri, MONGODB_OPTIONS);
         console.log('Conectado a MongoDB');
         await db.ensureRules();
