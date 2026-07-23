@@ -157,19 +157,29 @@ app.get('*', (req, res) => {
 });
 
 // ─── START ──────────────────────────────────────────────
-async function start() {
-  try {
-    await mongoose.connect(MONGODB_URI);
-    console.log('Conectado a MongoDB');
-    await db.ensureRules();
-    console.log('Reglas inicializadas');
-    app.listen(PORT, () => {
-      console.log(`Padel Match corriendo en puerto ${PORT}`);
-    });
-  } catch (err) {
-    console.error('Error al conectar a MongoDB:', err.message);
-    process.exit(1);
+async function connectMongo(retries = 10) {
+  for (let i = 1; i <= retries; i++) {
+    try {
+      await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+      console.log('Conectado a MongoDB');
+      await db.ensureRules();
+      console.log('Reglas inicializadas');
+      return true;
+    } catch (err) {
+      console.log(`Intento ${i}/${retries} MongoDB falló: ${err.message}`);
+      if (i < retries) await new Promise(r => setTimeout(r, 3000));
+    }
   }
+  console.error('No se pudo conectar a MongoDB después de varios intentos');
+  return false;
+}
+
+async function start() {
+  app.listen(PORT, () => {
+    console.log(`Servidor HTTP corriendo en puerto ${PORT}`);
+  });
+  // No bloqueamos el inicio del server, conectamos a MongoDB en background
+  connectMongo();
 }
 
 start();
