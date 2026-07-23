@@ -1,0 +1,24 @@
+{
+  "type": "web_service",
+  "name": "padel-match",
+  "ownerId": "tea-d7ntctr7uimc73bhusqg",
+  "repo": "https://github.com/manzamario/padel-match",
+  "autoDeploy": "yes",
+  "branch": "main",
+  "runtime": "node",
+  "serviceDetails": {
+    "env": "node",
+    "plan": "free",
+    "healthCheckPath": "/api/players",
+    "envSpecificDetails": {
+      "buildCommand": "npm install",
+      "startCommand": "npm start"
+    },
+    "envVars": [
+      {
+        "key": "MONGODB_URI",
+        "value": "mongodb+srv://padel_user:PadelMatch2024@cluster0.ztty11j.mongodb.net/padel-match?retryWrites=true&w=majority"
+      }
+    ]
+  }
+}
