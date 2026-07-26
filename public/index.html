@@ -39,10 +39,8 @@
     #registerScreen { position: relative; z-index: 1; min-height: 100vh; display: flex; align-items: center; padding: 40px 0; }
     .register-inner { width: 100%; max-width: 400px; margin: 0 auto; }
     .logo-section { text-align: center; margin-bottom: 36px; }
-    .logo-mark {
-      width: 64px; height: 64px; border-radius: 18px; background: linear-gradient(135deg, var(--green), #128C7E);
-      display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px;
-      font-size: 28px; box-shadow: 0 8px 32px rgba(37,211,102,0.2);
+    .logo-section img {
+      box-shadow: 0 8px 32px rgba(37,211,102,0.2);
     }
     .logo-section h1 { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px; }
     .logo-section h1 span { color: var(--green); }
@@ -256,7 +254,7 @@
       <div id="registerScreen">
       <div class="register-inner animate-in">
         <div class="logo-section">
-          <div class="logo-mark">&#127934;</div>
+          <img src="Logo.png" alt="Padel Match" style="width:64px;height:64px;border-radius:18px;display:inline-block;margin-bottom:16px;" />
           <h1>Padel <span>Match</span></h1>
           <p>Encontrá tu dupla ideal</p>
         </div>
@@ -292,7 +290,7 @@
             <div id="regMessage" class="msg"></div>
           </form>
           <div style="text-align:center;margin-top:14px;">
-            <button id="switchToLogin" class="btn btn-ghost btn-sm" style="width:auto;">Ya tengo cuenta &rarr;</button>
+            <button id="switchToLogin" class="btn btn-ghost btn-sm" style="width:auto;" onclick="document.getElementById('registerCard').classList.add('hidden');document.getElementById('loginCard').classList.remove('hidden');">Ya tengo cuenta &rarr;</button>
           </div>
           <div style="text-align:center;margin-top:8px;">
             <button id="showAdminLoginBtn" class="btn btn-ghost btn-sm" style="width:auto;font-size:0.7rem;color:var(--muted);">Administración</button>
