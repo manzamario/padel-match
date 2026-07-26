@@ -39,6 +39,19 @@ async function findPlayerByPhone(phone) {
   return p ? p.toObject() : null;
 }
 
+async function findOrCreatePendingPlayer(phone, category) {
+  let p = await Player.findOne({ phone });
+  if (p) return p.toObject();
+  const id = crypto.randomUUID ? crypto.randomUUID() : 'pl_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  p = await Player.create({ _id: id, name: '', phone, category, isComplete: false });
+  return p.toObject();
+}
+
+async function completeRegistration(id, name) {
+  const p = await Player.findByIdAndUpdate(id, { name: name.trim(), isComplete: true }, { new: true });
+  return p ? p.toObject() : null;
+}
+
 async function getAllPlayers() {
   const players = await Player.find().sort({ name: 1 });
   return players.map(p => p.toObject());
@@ -219,7 +232,7 @@ async function getAdminStats() {
 
 module.exports = {
   ensureRules,
-  createPlayer, getPlayer, getAllPlayers, findPlayerByPhone,
+  createPlayer, findOrCreatePendingPlayer, completeRegistration, getPlayer, getAllPlayers, findPlayerByPhone,
   toggleAvailability, addRejection, checkAndUnsuspend, deletePlayer, resetPlayer,
   createInvitation, getInvitation, getInvitationWithFrom, getPendingInvitationsForPlayer, getSentInvitations,
   respondInvitation, getInvitationStats, getRules, updateCategory,

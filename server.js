@@ -4,6 +4,7 @@ const path = require('path');
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const db = require('./database');
+const Player = require('./models/Player');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -64,7 +65,7 @@ app.post('/api/players', async (req, res) => {
     const player = await db.createPlayer(id, name.trim(), phone.trim(), category);
     res.status(201).json(player);
   } catch (err) {
-    res.status(500).json({ error: 'Error interno del servidor' });
+    res.status(500).json({ error: 'Error interno' });
   }
 });
 
@@ -188,6 +189,36 @@ app.get('/api/invitations/:id/respond', async (req, res) => {
     const inv = await db.getInvitation(req.params.id);
     if (!inv) return res.status(404).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Invitación no encontrada</h2></body></html>');
     if (inv.status !== 'pending') return res.status(400).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Esta invitación ya fue respondida</h2></body></html>');
+    const base = `${req.protocol}://${req.get('host')}`;
+    const toPlayer = await Player.findById(inv.toPlayer);
+    if (status === 'accepted' && (!toPlayer || !toPlayer.isComplete)) {
+      res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Padel Match</title><style>
+        *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#0a0a0f;color:#f0f0f5;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+        .card{background:#12121a;border-radius:20px;padding:32px 24px;max-width:400px;width:100%;border:1px solid rgba(255,255,255,0.06);text-align:center}
+        .icon{font-size:48px;margin-bottom:16px}
+        h2{font-size:1.3rem;margin-bottom:8px;font-weight:700}
+        p{color:#6b6b80;font-size:0.9rem;margin-bottom:6px;line-height:1.5}
+        .input-group{margin:16px 0;text-align:left}
+        .input-group label{display:block;font-size:0.8rem;color:#6b6b80;margin-bottom:6px}
+        .input-group input{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:#1a1a2e;color:#f0f0f5;font-size:1rem;outline:none}
+        .input-group input:focus{border-color:#25D366}
+        .btn{display:inline-block;margin-top:16px;padding:14px 24px;border-radius:12px;text-decoration:none;font-weight:600;font-size:0.95rem;border:none;cursor:pointer;width:100%}
+        .btn-green{background:#25D366;color:#000}
+      </style></head><body>
+        <div class="card">
+          <div class="icon">🎾</div>
+          <h2>¡Tenés una invitación!</h2>
+          <p>${inv.fromName} te invitó a jugar al pádel. Para aceptar, completá tus datos.</p>
+          <form id="regForm" onsubmit="event.preventDefault();submitReg()">
+            <div class="input-group"><label>Nombre completo</label><input type="text" id="regName" required placeholder="Tu nombre" /></div>
+            <input type="hidden" id="invId" value="${req.params.id}" />
+            <button type="submit" class="btn btn-green">Aceptar e ingreso</button>
+          </form>
+        </div>
+        <script>async function submitReg(){const n=document.getElementById('regName').value.trim();if(!n)return;const r=await fetch('/api/invitations/${req.params.id}/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});if(r.ok){location.reload()}else{alert('Error al registrarse')}}</script>
+      </body></html>`);
+      return;
+    }
     const result = await db.respondInvitation(req.params.id, status);
     if (!result) return res.status(500).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Error al procesar</h2></body></html>');
     const invite = await db.getInvitationWithFrom(req.params.id);
@@ -221,7 +252,22 @@ app.get('/api/invitations/:id/respond', async (req, res) => {
       <script>setTimeout(()=>{document.getElementById('waBtn').click()},1500)</script>
     </body></html>`);
   } catch (err) {
-    res.status(500).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Error interno</h2></body></html>');
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.post('/api/invitations/:id/register', async (req, res) => {
+  try {
+    const inv = await db.getInvitation(req.params.id);
+    if (!inv || inv.status !== 'pending') return res.status(400).json({ error: 'Invitación no válida' });
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Nombre requerido' });
+    const player = await db.completeRegistration(inv.toPlayer, name.trim());
+    if (!player) return res.status(500).json({ error: 'Error al crear perfil' });
+    await db.respondInvitation(req.params.id, 'accepted');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
   }
 });
 
@@ -273,6 +319,24 @@ app.post('/api/admin/login', (req, res) => {
   const token = crypto.randomBytes(32).toString('hex');
   adminTokens.add(token);
   res.json({ token });
+});
+
+app.post('/api/admin/players', requireAdmin, async (req, res) => {
+  try {
+    const { phone, category } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Teléfono requerido' });
+    if (!category) return res.status(400).json({ error: 'Categoría requerida' });
+    const clean = phone.replace(/\s/g, '');
+    const existing = await db.findPlayerByPhone(clean);
+    if (existing) {
+      if (existing.isComplete) return res.status(409).json({ error: 'Jugador completo ya existe' });
+      return res.json({ ...existing, id: existing.id });
+    }
+    const player = await db.findOrCreatePendingPlayer(clean, category);
+    res.status(201).json({ ...player, id: player.id });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
 });
 
 function requireAdmin(req, res, next) {
