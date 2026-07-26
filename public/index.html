@@ -253,69 +253,65 @@
     <!-- REGISTER / LOGIN -->
       <div id="registerScreen">
       <div class="register-inner animate-in">
-        <div class="logo-section">
-          <img src="Logo.png" alt="Padel Match" style="width:64px;height:64px;border-radius:18px;display:inline-block;margin-bottom:16px;" />
-          <h1>Padel <span>Match</span></h1>
-          <p>Encontrá tu dupla ideal</p>
+        <div class="logo-section" style="margin-bottom:28px;">
+          <img src="Logo.png" alt="Padel Match" style="width:120px;height:auto;border-radius:24px;display:inline-block;margin-bottom:12px;" />
+          <h1 style="font-size:1.8rem;">Padel <span>Match</span></h1>
+          <p style="font-size:1rem;">Encontrá tu dupla ideal</p>
         </div>
 
         <!-- REGISTER FORM -->
         <div class="register-card" id="registerCard">
-          <h2 id="registerTitle">Crear cuenta</h2>
-          <form id="registerForm">
-            <div class="input-group" id="nameGroup">
-              <label>Nombre <span class="req">*</span></label>
-              <input type="text" id="regName" autocomplete="name" placeholder="Tu nombre" required />
-            </div>
-            <div class="input-group">
-              <label>WhatsApp <span class="req">*</span></label>
-              <input type="tel" id="regPhone" autocomplete="tel" inputmode="numeric" placeholder="5491123456789" required />
-              <div class="input-hint">Código de país + número sin espacios</div>
-            </div>
-            <div class="input-group" id="categoryGroup">
-              <label>Categoría <span class="req">*</span></label>
-              <select id="regCategory" required>
-                <option value="">Seleccioná</option>
-                <option value="8">8 - Principiante</option>
-                <option value="7">7 - Baja</option>
-                <option value="6">6 - Media-Baja</option>
-                <option value="5">5 - Media</option>
-                <option value="4">4 - Media-Alta</option>
-                <option value="3">3 - Alta</option>
-                <option value="2">2 - Muy Alta</option>
-                <option value="1">1 - Profesional</option>
-              </select>
-            </div>
-            <button type="submit" class="btn btn-primary" id="regBtn">Crear cuenta</button>
-            <div id="regMessage" class="msg"></div>
-          </form>
-          <div style="text-align:center;margin-top:14px;">
-            <button id="switchToLogin" class="btn btn-ghost btn-sm" style="width:auto;" onclick="document.getElementById('registerCard').classList.add('hidden');document.getElementById('loginCard').classList.remove('hidden');">Ya tengo cuenta &rarr;</button>
+          <h2>Crear cuenta</h2>
+          <div class="input-group">
+            <label>Nombre <span class="req">*</span></label>
+            <input type="text" id="regName" autocomplete="name" placeholder="Tu nombre" />
+          </div>
+          <div class="input-group">
+            <label>WhatsApp <span class="req">*</span></label>
+            <input type="tel" id="regPhone" autocomplete="tel" inputmode="numeric" placeholder="5491123456789" />
+            <div class="input-hint">Código de país + número (ej: 5491123456789)</div>
+          </div>
+          <div class="input-group">
+            <label>Categoría <span class="req">*</span></label>
+            <select id="regCategory">
+              <option value="">Seleccioná tu nivel</option>
+              <option value="8">8 - Principiante</option>
+              <option value="7">7 - Baja</option>
+              <option value="6">6 - Media-Baja</option>
+              <option value="5">5 - Media</option>
+              <option value="4">4 - Media-Alta</option>
+              <option value="3">3 - Alta</option>
+              <option value="2">2 - Muy Alta</option>
+              <option value="1">1 - Profesional</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="regBtn" onclick="doRegister()">Crear cuenta</button>
+          <div id="regMessage" class="msg"></div>
+          <div style="text-align:center;margin-top:16px;">
+            <button class="btn btn-ghost btn-sm" style="width:auto;" onclick="showLogin()">Ya tengo cuenta &rarr;</button>
           </div>
           <div style="text-align:center;margin-top:8px;">
-            <button id="showAdminLoginBtn" class="btn btn-ghost btn-sm" style="width:auto;font-size:0.7rem;color:var(--muted);">Administración</button>
+            <button class="btn btn-ghost btn-sm" style="width:auto;font-size:0.7rem;color:var(--muted);" onclick="showAdminLogin()">Administración</button>
           </div>
         </div>
 
         <!-- LOGIN FORM -->
         <div class="register-card hidden" id="loginCard">
           <h2>Iniciar sesión</h2>
-          <form id="loginForm">
-            <div class="input-group">
-              <label>WhatsApp <span class="req">*</span></label>
-              <input type="tel" id="loginPhone" autocomplete="tel" inputmode="numeric" placeholder="5491123456789" required />
-              <div class="input-hint">Ingresá el mismo número que usaste al registrarte</div>
-            </div>
-            <button type="submit" class="btn btn-primary" id="loginBtn">Buscar</button>
-            <div id="loginMessage" class="msg"></div>
-          </form>
-          <div id="loginPlayerInfo" class="hidden" style="margin-top:16px;padding:14px;background:rgba(37,211,102,0.06);border:1px solid rgba(37,211,102,0.15);border-radius:12px;">
+          <div class="input-group">
+            <label>WhatsApp <span class="req">*</span></label>
+            <input type="tel" id="loginPhone" autocomplete="tel" inputmode="numeric" placeholder="5491123456789" />
+            <div class="input-hint">Ingresá el mismo número que usaste al registrarte</div>
+          </div>
+          <button class="btn btn-primary" id="loginBtn" onclick="doLoginSearch()">Buscar</button>
+          <div id="loginMessage" class="msg"></div>
+          <div id="loginResult" class="hidden" style="margin-top:16px;padding:16px;background:rgba(37,211,102,0.06);border:1px solid rgba(37,211,102,0.15);border-radius:12px;">
             <div style="font-size:0.85rem;margin-bottom:10px;color:var(--muted);">¿Sos vos?</div>
             <div id="loginPlayerDetails"></div>
-            <button id="confirmLoginBtn" class="btn btn-primary" style="margin-top:10px;">Soy yo, ingresar</button>
+            <button class="btn btn-primary" style="margin-top:10px;" id="confirmLoginBtn" onclick="doLoginConfirm()">Soy yo, ingresar</button>
           </div>
-          <div style="text-align:center;margin-top:14px;">
-            <button id="switchToRegister" class="btn btn-ghost btn-sm" style="width:auto;">&larr; Crear cuenta nueva</button>
+          <div style="text-align:center;margin-top:16px;">
+            <button class="btn btn-ghost btn-sm" style="width:auto;" onclick="showRegisterScreen()">&larr; Crear cuenta nueva</button>
           </div>
         </div>
       </div>
@@ -395,16 +391,16 @@
         <div style="width:100%;max-width:360px;margin:0 auto;">
           <div class="register-card">
             <h2>Acceso Administrador</h2>
-            <form id="adminLoginForm">
+            <form id="adminLoginForm" onsubmit="doAdminLogin();return false">
               <div class="input-group">
                 <label>Contraseña</label>
                 <input type="password" id="adminPassword" autocomplete="off" placeholder="Contraseña maestra" required />
               </div>
-              <button type="submit" class="btn btn-primary" id="adminLoginBtn">Ingresar</button>
+              <button type="button" class="btn btn-primary" id="adminLoginBtn" onclick="doAdminLogin()">Ingresar</button>
               <div id="adminLoginMsg" class="msg"></div>
             </form>
             <div style="text-align:center;margin-top:14px;">
-              <button id="backFromAdminLogin" class="btn btn-ghost btn-sm" style="width:auto;">Volver</button>
+              <button class="btn btn-ghost btn-sm" style="width:auto;" onclick="backFromAdminLogin()">Volver</button>
             </div>
           </div>
         </div>
@@ -417,7 +413,7 @@
         <div class="container top-bar-inner" style="padding:0;">
           <h1>Panel <span>Admin</span></h1>
           <div class="top-actions">
-            <button id="adminLogoutBtn" class="btn btn-sm btn-ghost">Salir</button>
+            <button id="adminLogoutBtn" class="btn btn-sm btn-ghost" onclick="doAdminLogout()">Salir</button>
           </div>
         </div>
       </div>
@@ -488,48 +484,52 @@
         const r = await fetch(`${API}/api/players/${myPlayerId}`).then(r => r.ok).catch(() => false);
         if (r) { showApp(); return; }
       }
-      showRegister();
+      showRegisterScreen();
     }
 
-    function showRegister() {
-      document.getElementById('registerScreen').hidden = false;
+    function showRegisterScreen() {
+      hideAll();
       document.getElementById('registerScreen').classList.remove('hidden');
-      document.getElementById('appScreen').classList.add('hidden');
-      document.getElementById('adminLogin').classList.add('hidden');
-      document.getElementById('adminScreen').classList.add('hidden');
       document.getElementById('registerCard').classList.remove('hidden');
       document.getElementById('loginCard').classList.add('hidden');
+      document.getElementById('loginResult').classList.add('hidden');
+    }
+
+    function showLogin() {
+      document.getElementById('registerCard').classList.add('hidden');
+      document.getElementById('loginCard').classList.remove('hidden');
+      document.getElementById('loginResult').classList.add('hidden');
+      document.getElementById('loginMessage').className = 'msg';
+      document.getElementById('loginMessage').textContent = '';
+      document.getElementById('loginPhone').value = '';
     }
 
     function showApp() {
-      document.getElementById('registerScreen').classList.add('hidden');
+      hideAll();
       document.getElementById('appScreen').classList.remove('hidden');
       loadApp();
       setInterval(loadApp, 15000);
     }
 
-    // Switch between register and login
-    document.getElementById('switchToLogin').addEventListener('click', () => {
-      document.getElementById('registerCard').classList.add('hidden');
-      document.getElementById('loginCard').classList.remove('hidden');
-    });
-    document.getElementById('switchToRegister').addEventListener('click', () => {
-      document.getElementById('loginCard').classList.add('hidden');
-      document.getElementById('registerCard').classList.remove('hidden');
-    });
+    function hideAll() {
+      document.getElementById('registerScreen').classList.add('hidden');
+      document.getElementById('appScreen').classList.add('hidden');
+      document.getElementById('adminLogin').classList.add('hidden');
+      document.getElementById('adminScreen').classList.add('hidden');
+    }
 
     // REGISTER
-    document.getElementById('registerForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
+    async function doRegister() {
       const name = document.getElementById('regName');
       const phone = document.getElementById('regPhone');
       const category = document.getElementById('regCategory');
       const msg = document.getElementById('regMessage');
       const btn = document.getElementById('regBtn');
 
-      if (!category.value) { msg.className = 'msg show error'; msg.textContent = 'Seleccioná una categoría.'; return; }
-      const clean = phone.value.trim().replace(/\s/g,'');
-      if (!/^\d{7,15}$/.test(clean)) { msg.className = 'msg show error'; msg.textContent = 'Teléfono inválido.'; return; }
+      if (!name.value.trim()) { msg.className = 'msg show error'; msg.textContent = 'Escribí tu nombre'; return; }
+      if (!category.value) { msg.className = 'msg show error'; msg.textContent = 'Seleccioná una categoría'; return; }
+      const clean = phone.value.trim().replace(/\s/g, '');
+      if (!/^\d{7,15}$/.test(clean)) { msg.className = 'msg show error'; msg.textContent = 'Teléfono inválido (solo números, ej: 5491123456789)'; return; }
 
       btn.disabled = true; btn.textContent = 'Creando...';
       try {
@@ -540,62 +540,67 @@
         const data = await r.json();
         if (!r.ok) {
           if (r.status === 409) {
-            msg.className = 'msg show error'; msg.textContent = 'Este teléfono ya está registrado. Usá "Ya tengo cuenta" para iniciar sesión.';
-            btn.disabled = false; btn.textContent = 'Crear cuenta'; return;
+            msg.className = 'msg show error'; msg.textContent = 'Este teléfono ya está registrado. Usá "Ya tengo cuenta" para entrar.';
+          } else {
+            msg.className = 'msg show error'; msg.textContent = data.error || 'Error';
           }
-          msg.className = 'msg show error'; msg.textContent = data.error || 'Error';
           btn.disabled = false; btn.textContent = 'Crear cuenta'; return;
         }
-        myPlayerId = data.id; localStorage.setItem('padel_myId', myPlayerId);
+        myPlayerId = data.id;
+        localStorage.setItem('padel_myId', myPlayerId);
         showApp();
+        return;
       } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; }
       btn.disabled = false; btn.textContent = 'Crear cuenta';
-    });
+    }
 
     // LOGIN
     let foundPlayerId = null;
 
-    document.getElementById('loginForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
+    async function doLoginSearch() {
       const phone = document.getElementById('loginPhone');
-      const msg = document.getElementById('loginMessage');
+      const msgEl = document.getElementById('loginMessage');
       const btn = document.getElementById('loginBtn');
-      const info = document.getElementById('loginPlayerInfo');
-      const clean = phone.value.trim().replace(/\s/g,'');
-      msg.className = 'msg'; msg.textContent = ''; info.classList.add('hidden'); foundPlayerId = null;
-      if (!/^\d{7,15}$/.test(clean)) { msg.className = 'msg show error'; msg.textContent = 'Teléfono inválido.'; return; }
+      const info = document.getElementById('loginResult');
+      const clean = phone.value.trim().replace(/\s/g, '');
+      msgEl.className = 'msg'; msgEl.textContent = '';
+      info.classList.add('hidden');
+      foundPlayerId = null;
+
+      if (!/^\d{7,15}$/.test(clean)) { msgEl.className = 'msg show error'; msgEl.textContent = 'Teléfono inválido'; return; }
       btn.disabled = true; btn.textContent = 'Buscando...';
       try {
         const r = await fetch(`${API}/api/players/by-phone/${clean}`);
         if (r.status === 404) {
-          msg.className = 'msg show error'; msg.textContent = 'No hay cuenta con ese teléfono. Creá una cuenta nueva.';
+          msgEl.className = 'msg show error'; msgEl.textContent = 'No hay cuenta con ese teléfono. Creá una cuenta nueva.';
           btn.disabled = false; btn.textContent = 'Buscar'; return;
         }
-        if (!r.ok) { msg.className = 'msg show error'; msg.textContent = 'Error del servidor'; btn.disabled = false; btn.textContent = 'Buscar'; return; }
+        if (!r.ok) { msgEl.className = 'msg show error'; msgEl.textContent = 'Error del servidor'; btn.disabled = false; btn.textContent = 'Buscar'; return; }
         const data = await r.json();
         foundPlayerId = data.id;
         const cats = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
-        document.getElementById('loginPlayerDetails').innerHTML = `
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);font-size:0.75rem;">Nombre</span><span style="font-weight:600;">${esc(data.name)}</span></div>
-            <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);font-size:0.75rem;">Categoría</span><span>${cats[data.category]||'N/A'}</span></div>
+        document.getElementById('loginPlayerDetails').innerHTML =
+          `<div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;justify-content:space-between;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.06);"><span style="color:var(--muted);font-size:0.75rem;">Nombre</span><span style="font-weight:600;">${esc(data.name)}</span></div>
+            <div style="display:flex;justify-content:space-between;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.06);"><span style="color:var(--muted);font-size:0.75rem;">Categoría</span><span>${cats[data.category]||'N/A'}</span></div>
             <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);font-size:0.75rem;">Teléfono</span><span>${data.phone}</span></div>
           </div>`;
         info.classList.remove('hidden');
-      } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; }
+      } catch { msgEl.className = 'msg show error'; msgEl.textContent = 'Error de conexión'; }
       btn.disabled = false; btn.textContent = 'Buscar';
-    });
+    }
 
-    document.getElementById('confirmLoginBtn').addEventListener('click', () => {
+    function doLoginConfirm() {
       if (foundPlayerId) {
-        myPlayerId = foundPlayerId; localStorage.setItem('padel_myId', myPlayerId);
+        myPlayerId = foundPlayerId;
+        localStorage.setItem('padel_myId', myPlayerId);
         showApp();
       }
-    });
+    }
 
     document.getElementById('logoutBtn').addEventListener('click', () => {
       if (confirm('¿Cerrar sesión?')) {
-        localStorage.removeItem('padel_myId'); myPlayerId = null; showRegister();
+        localStorage.removeItem('padel_myId'); myPlayerId = null; showRegisterScreen();
       }
     });
 
@@ -877,20 +882,17 @@ Te invito a jugar el ${date} a las ${time} en ${court}.
     // ═══════════════ ADMIN ═══════════════
     let adminToken = localStorage.getItem('padel_adminToken');
 
-    document.getElementById('showAdminLoginBtn').addEventListener('click', () => {
+    function showAdminLogin() {
       document.getElementById('registerScreen').classList.add('hidden');
-      document.getElementById('adminLogin').hidden = false;
       document.getElementById('adminLogin').classList.remove('hidden');
-    });
+    }
 
-    document.getElementById('backFromAdminLogin').addEventListener('click', () => {
+    function backFromAdminLogin() {
       document.getElementById('adminLogin').classList.add('hidden');
-      document.getElementById('registerScreen').hidden = false;
       document.getElementById('registerScreen').classList.remove('hidden');
-    });
+    }
 
-    document.getElementById('adminLoginForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
+    async function doAdminLogin() {
       const pass = document.getElementById('adminPassword');
       const btn = document.getElementById('adminLoginBtn');
       const msg = document.getElementById('adminLoginMsg');
@@ -909,15 +911,14 @@ Te invito a jugar el ${date} a las ${time} en ${court}.
         loadAdminPanel();
       } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; }
       btn.disabled = false; btn.textContent = 'Ingresar';
-    });
+    }
 
-    document.getElementById('adminLogoutBtn').addEventListener('click', () => {
+    function doAdminLogout() {
       localStorage.removeItem('padel_adminToken');
       adminToken = null;
       document.getElementById('adminScreen').classList.add('hidden');
-      document.getElementById('registerScreen').hidden = false;
       document.getElementById('registerScreen').classList.remove('hidden');
-    });
+    }
 
     async function loadAdminPanel() {
       if (!adminToken) return;
