@@ -423,13 +423,24 @@
       </div>
 
       <div id="adminPlayersTab" class="tab-content active animate-in">
+        <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;">
+          <h3 style="font-size:0.85rem;margin-bottom:10px;">Agregar jugador por teléfono</h3>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <input type="tel" id="adminAddPhone" placeholder="+543725430303" inputmode="numeric" style="flex:1;min-width:140px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:0.8rem;font-family:inherit;" />
+            <select id="adminAddCategory" style="padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:0.75rem;font-family:inherit;">
+              <option value="">Categoría</option>
+              <option value="8">8 Principiante</option><option value="7">7 Baja</option><option value="6">6 Media-Baja</option><option value="5">5 Media</option><option value="4">4 Media-Alta</option><option value="3">3 Alta</option><option value="2">2 Muy Alta</option><option value="1">1 Pro</option>
+            </select>
+            <button class="btn btn-sm btn-primary" onclick="adminAddPlayer()">Agregar</button>
+          </div>
+          <div id="adminAddMsg" class="msg" style="margin-top:8px;"></div>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
           <input type="text" id="adminSearchPlayer" placeholder="Buscar jugador..." style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:0.8rem;font-family:inherit;background:var(--card);color:var(--text);" />
           <select id="adminFilterStatus" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:0.8rem;font-family:inherit;background:var(--card);color:var(--text);">
             <option value="all">Todos</option>
             <option value="active">Activos</option>
             <option value="suspended">Suspendidos</option>
-            <option value="online">Disponibles</option>
           </select>
         </div>
         <div id="adminPlayerList" class="player-list"></div>
@@ -667,7 +678,7 @@
       let filtered = players;
       if (fc !== 'all') filtered = filtered.filter(p => p.category === fc);
       if (fn) filtered = filtered.filter(p => p.name.toLowerCase().includes(fn));
-      filtered = filtered.filter(p => p.available && !p.suspended && p.id !== me.id);
+      filtered = filtered.filter(p => p.available && !p.suspended && p.id !== me.id && p.isComplete);
       const container = document.getElementById('playerList');
       document.getElementById('availableCount').textContent = filtered.length > 0 ? `${filtered.length} disponibles` : '';
       if (!filtered.length) { container.innerHTML = '<div class="empty-state">No hay jugadores disponibles ahora</div>'; updateMultiBar(); return; }
@@ -931,6 +942,25 @@ Te invito a jugar el ${date} a las ${time} en ${court}.
       loadAdminStats();
     }
 
+    async function adminAddPlayer() {
+      const phone = document.getElementById('adminAddPhone');
+      const category = document.getElementById('adminAddCategory');
+      const msg = document.getElementById('adminAddMsg');
+      const clean = phone.value.trim().replace(/\s/g, '');
+      if (!/^\+?\d{7,15}$/.test(clean)) { msg.className = 'msg show error'; msg.textContent = 'Teléfono inválido'; return; }
+      if (!category.value) { msg.className = 'msg show error'; msg.textContent = 'Seleccioná categoría'; return; }
+      try {
+        const r = await fetch(`${API}/api/admin/players`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+          body: JSON.stringify({ phone: clean, category: category.value })
+        });
+        const data = await r.json();
+        if (!r.ok) { msg.className = 'msg show error'; msg.textContent = data.error; return; }
+        msg.className = 'msg show ok'; msg.textContent = `Jugador ${data.id ? 'agregado' : 'ya existe'}`;
+        phone.value = ''; category.value = ''; loadAdminPlayers();
+      } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; }
+    }
+
     async function loadAdminPlayers() {
       try {
         const r = await fetch(`${API}/api/admin/players`, { headers: { 'Authorization': `Bearer ${adminToken}` } });
@@ -951,7 +981,7 @@ Te invito a jugar el ${date} a las ${time} en ${court}.
           const created = p.created_at || p.createdAt ? new Date(p.created_at || p.createdAt).toLocaleDateString('es-AR') : '-';
           return `<div class="player-item ${p.suspended ? 'suspended' : ''}" style="flex-wrap:wrap;">
             <div class="player-info" style="min-width:0;">
-              <div class="player-row"><span class="status-dot ${dot}"></span><span class="p-name">${esc(p.name)}</span></div>
+              <div class="player-row"><span class="status-dot ${dot}"></span><span class="p-name">${esc(p.name)}</span>${!p.isComplete ? '<span style="font-size:0.6rem;background:var(--amber);color:#000;padding:1px 5px;border-radius:5px;margin-left:4px;">PENDIENTE</span>' : ''}</div>
               <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'N/A'}</span><span class="p-phone">${esc(p.phone)}</span></div>
               <div class="player-row" style="font-size:0.7rem;color:var(--muted);gap:8px;">
                 <span>Rechazos: ${p.rejections||0}/3</span>
