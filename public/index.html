@@ -706,7 +706,11 @@
         });
         const d = await r.json();
         if (!r.ok) { msg.className = 'msg show error'; msg.textContent = d.error || 'Error'; btn.disabled = false; btn.textContent = 'Enviar invitación'; return; }
-        const msg =
+        const invId = d._id || d.id;
+        const base = window.location.origin;
+        const acceptLink = `${base}/api/invitations/${invId}/respond?status=accepted`;
+        const rejectLink = `${base}/api/invitations/${invId}/respond?status=rejected`;
+        const whatsappMsg =
 `INVITACIÓN DE PÁDEL 🎾
 
 De: ${inviteTarget.name}
@@ -714,15 +718,18 @@ De: ${inviteTarget.name}
 ⏰ Hora: ${time}
 📍 Cancha: ${court}
 
-👉 Confirmá tu asistencia desde Padel Match
+✅ Sí, voy a asistir:
+${acceptLink}
+
+❌ No, no voy a poder:
+${rejectLink}
+
 💬 Respondé este mensaje para coordinar
 
 📱 ¿No estás registrado?
-Creá tu cuenta en Padel Match con tu número de teléfono para recibir invitaciones.
-Verificá si ya estás registrado en: padel-match-p50g.onrender.com
-
-Saludos!`;
-        window.open(`https://wa.me/${inviteTarget.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+Creá tu cuenta en Padel Match con tu teléfono para recibir invitaciones.
+${base}`;
+        window.open(`https://wa.me/${inviteTarget.phone}?text=${encodeURIComponent(whatsappMsg)}`, '_blank');
         document.getElementById('inviteModal').classList.add('hidden');
         inviteTarget = null;
         loadApp();

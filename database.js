@@ -90,6 +90,19 @@ async function createInvitation(id, fromId, toId) {
   return inv.toObject();
 }
 
+async function getInvitationWithFrom(id) {
+  const inv = await Invitation.findById(id).populate('fromPlayer', 'name phone category').lean();
+  if (!inv) return null;
+  return {
+    id: inv._id.toString(),
+    fromName: inv.fromPlayer?.name || 'Desconocido',
+    fromPhone: inv.fromPlayer?.phone || '',
+    fromCategory: inv.fromPlayer?.category || '',
+    status: inv.status,
+    createdAt: inv.createdAt
+  };
+}
+
 async function getInvitation(id) {
   const inv = await Invitation.findById(id);
   return inv ? inv.toObject() : null;
@@ -208,7 +221,7 @@ module.exports = {
   ensureRules,
   createPlayer, getPlayer, getAllPlayers, findPlayerByPhone,
   toggleAvailability, addRejection, checkAndUnsuspend, deletePlayer, resetPlayer,
-  createInvitation, getInvitation, getPendingInvitationsForPlayer, getSentInvitations,
+  createInvitation, getInvitation, getInvitationWithFrom, getPendingInvitationsForPlayer, getSentInvitations,
   respondInvitation, getInvitationStats, getRules, updateCategory,
   getAllPlayersFull, adminSuspendPlayer, adminUnsuspendPlayer, adminAddWarning,
   updateRule, getAdminStats

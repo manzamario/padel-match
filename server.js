@@ -179,6 +179,47 @@ app.get('/api/invitations/sent/:playerId', async (req, res) => {
   }
 });
 
+app.get('/api/invitations/:id/respond', async (req, res) => {
+  try {
+    const { status } = req.query;
+    if (!['accepted', 'rejected'].includes(status)) {
+      return res.status(400).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Enlace inválido</h2></body></html>');
+    }
+    const inv = await db.getInvitation(req.params.id);
+    if (!inv) return res.status(404).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Invitación no encontrada</h2></body></html>');
+    if (inv.status !== 'pending') return res.status(400).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Esta invitación ya fue respondida</h2></body></html>');
+    const result = await db.respondInvitation(req.params.id, status);
+    if (!result) return res.status(500).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Error al procesar</h2></body></html>');
+    const invite = await db.getInvitationWithFrom(req.params.id);
+    const base = `${req.protocol}://${req.get('host')}`;
+    const isAccepted = status === 'accepted';
+    res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Padel Match</title><style>
+      *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#0a0a0f;color:#f0f0f5;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+      .card{background:#12121a;border-radius:20px;padding:32px 24px;max-width:400px;width:100%;border:1px solid rgba(255,255,255,0.06);text-align:center}
+      .icon{font-size:48px;margin-bottom:16px}
+      h2{font-size:1.3rem;margin-bottom:8px;font-weight:700}
+      p{color:#6b6b80;font-size:0.9rem;margin-bottom:6px;line-height:1.5}
+      .detail{color:#f0f0f5;font-weight:600}
+      .btn{display:inline-block;margin-top:20px;padding:14px 24px;border-radius:12px;text-decoration:none;font-weight:600;font-size:0.95rem}
+      .btn-green{background:#25D366;color:#000}
+      .btn-red{background:#ff4757;color:#fff}
+      .btn-outline{border:1px solid rgba(255,255,255,0.1);color:#6b6b80;margin-top:12px}
+    </style></head><body>
+      <div class="card">
+        <div class="icon">${isAccepted ? '✅' : '❌'}</div>
+        <h2>${isAccepted ? '¡Asistencia confirmada!' : 'Invitación rechazada'}</h2>
+        <p>${isAccepted ? 'Has confirmado tu asistencia al partido con' : 'Has rechazado la invitación de'}</p>
+        <p class="detail">${invite.fromName}</p>
+        ${isAccepted ? `<a class="btn btn-green" href="https://wa.me/${invite.fromPhone}" target="_blank">Contactar por WhatsApp</a>` : ''}
+        <br>
+        <a class="btn btn-outline" href="${base}" style="display:inline-block;margin-top:16px;">Ir a Padel Match</a>
+      </div>
+    </body></html>`);
+  } catch (err) {
+    res.status(500).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Error interno</h2></body></html>');
+  }
+});
+
 app.put('/api/invitations/:id', async (req, res) => {
   try {
     const { status } = req.body;
