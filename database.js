@@ -25,7 +25,7 @@ async function ensureRules() {
 
 // --- PLAYERS ---
 async function createPlayer(id, name, phone, category) {
-  const p = await Player.create({ _id: id, name, phone, category });
+  const p = await Player.create({ _id: id, name, phone, category, isComplete: true });
   return p.toObject();
 }
 
