@@ -469,17 +469,29 @@
       <div class="modal-title" id="inviteModalTitle">Invitar a jugar</div>
       <div class="modal-sub" id="inviteModalSub">Completá los detalles del partido</div>
       <div id="inviteTargetList" style="font-size:0.8rem;color:var(--green);margin-bottom:14px;font-weight:500;"></div>
-      <div class="modal-field">
+      <div class="modal-field" id="invDateField">
         <label>Fecha</label>
-        <input type="text" id="invDate" placeholder="Ej: 28/07, mañana, sábado" autocomplete="off" />
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="invDate" placeholder="Ej: hoy, mañana, 28/07" autocomplete="off" style="flex:1;" />
+          <button type="button" id="invDateBtn" class="btn btn-ghost" style="padding:8px 12px;font-size:0.9rem;">📅 Calendar</button>
+        </div>
+        <div id="invDateError" class="msg show error" style="display:none;margin-top:4px;">Seleccione una fecha</div>
       </div>
-      <div class="modal-field">
+      <div class="modal-field" id="invTimeField">
         <label>Horario</label>
-        <input type="text" id="invTime" placeholder="Ej: 18:00, 10:30" autocomplete="off" />
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="invTime" placeholder="Ej: 18, 10:30" autocomplete="off" style="flex:1;" />
+          <button type="button" id="invTimeBtn" class="btn btn-ghost" style="padding:8px 12px;font-size:0.9rem;" title="Add :00 if only hour entered">⏱️ Add :00</button>
+        </div>
+        <div id="invTimeError" class="msg show error" style="display:none;margin-top:4px;"> Indique el horario</div>
       </div>
       <div class="modal-field">
         <label>Cancha / Lugar</label>
-        <input type="text" id="invCourt" placeholder="Ej: Padel Club Norte, cancha 3" autocomplete="off" />
+        <select id="invCourt" style="padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:0.9rem;">
+          <option value="">Seleccionar ubicación</option>
+          <option value="Blindes">Blindes</option>
+          <option value="Santi Espíndola">Santi Espíndola</option>
+        </select>
       </div>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="inviteCancelBtn">Cancelar</button>
@@ -755,11 +767,99 @@
     document.getElementById('inviteModal').addEventListener('click', function(e) {
       if (e.target === this) closeInvite();
     });
+
+    // NUEVO: Date field with today suggestion and validation
+    const invDate = document.getElementById('invDate');
+    invDate.addEventListener('input', () => {
+      if (!invDate.value) {
+        document.getElementById('invDateField').classList.add('error');
+        document.getElementById('invDateError').style.display = 'block';
+      } else {
+        document.getElementById('invDateField').classList.remove('error');
+        document.getElementById('invDateError').style.display = 'none';
+      }
+    });
+    invDate.addEventListener('focus', () => {
+      if (!invDate.value) {
+        const today = new Date().toLocaleDateString('es-ES');
+        invDate.value = today;
+      }
+    });
+
+    // NUEVO: Time field with auto :00 and validation
+    const invTime = document.getElementById('invTime');
+    invTime.addEventListener('input', () => {
+      let val = invTime.value.trim();
+      if (val) {
+        const parts = val.split(':');
+        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+          const hours = parseInt(parts[0]), minutes = parseInt(parts[1]);
+          if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+            invTime.value = hours + ':' + (minutes < 10 ? '0' + minutes : minutes);
+          }
+        } else if (!isNaN(val) && parseInt(val) <= 23) {
+          invTime.value = val + ':00';
+        }
+      }
+      if (!invTime.value) {
+        document.getElementById('invTimeField').classList.add('error');
+        document.getElementById('invTimeError').style.display = 'block';
+      } else {
+        document.getElementById('invTimeField').classList.remove('error');
+        document.getElementById('invTimeError').style.display = 'none';
+      }
+    });
+
     function closeInvite() {
       document.getElementById('inviteModal').classList.add('hidden');
       document.getElementById('inviteTargetList').textContent = '';
       window._inviteTargets = null;
     }
+
+    // NUEVO: Calendar button functionality
+    document.getElementById('invDateBtn').addEventListener('click', () => {
+      const today = new Date();
+      const todayStr = today.toLocaleDateString('es-ES');
+      const tomorrow = new Date(); tomorrow.setDate(today.getDate() + 1);
+      const tomorrowStr = tomorrow.toLocaleDateString('es-ES');
+      const nextWeek = new Date(); nextWeek.setDate(today.getDate() + 7);
+      const nextWeekStr = nextWeek.toLocaleDateString('es-ES');
+      
+      const options = [
+        { value: todayStr, text: `Hoy - ${todayStr}` },
+        { value: tomorrowStr, text: `Mañana - ${tomorrowStr}` },
+        { value: nextWeekStr, text: `Próxima semana - ${nextWeekStr}` }
+      ];
+      
+      const input = document.getElementById('invDate');
+      const html = `
+        <div style="position:absolute;z-index:100;background:var(--bg);border:1px solid var(--border);padding:12px;border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+          <div style="margin-bottom:8px;font-weight:600;font-size:0.85rem;">Seleccionar fecha</div>
+          <div style="max-height:200px;overflow-y:auto;">
+            ${options.map(opt => `
+              <div style="padding:8px;cursor:pointer;border-radius:4px;" 
+                onmouseover="this.style.background='#333'" 
+                onmouseout="this.style.background='transparent'"
+                onclick="document.getElementById('invDate').value='${opt.value}'; this.parentElement.parentElement.remove(); document.getElementById('invDateField').classList.remove('error'); document.getElementById('invDateError').style.display='none';">
+                ${opt.text}
+              </div>
+            ").join('')}
+          </div>
+        </div>
+      `;
+      
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      input.parentElement.appendChild(container);
+      
+      const closeCalendar = (e) => {
+        if (!container.contains(e.target) && e.target !== input && e.target !== document.getElementById('invDateBtn')) {
+          document.body.removeChild(container);
+          document.removeEventListener('click', closeCalendar);
+        }
+      };
+      setTimeout(() => document.addEventListener('click', closeCalendar), 0);
+    });
 
     document.getElementById('inviteSendBtn').addEventListener('click', async () => {
       const targets = window._inviteTargets;
@@ -769,7 +869,27 @@
       const court = document.getElementById('invCourt').value.trim();
       const msg = document.getElementById('inviteModalMsg');
 
-      if (!date) { msg.className = 'msg show error'; msg.textContent = 'Indicá la fecha'; return; }
+      if (!date) {
+        document.getElementById('invDateField').classList.add('error');
+        document.getElementById('invDateError').style.display = 'block';
+        msg.className = 'msg show error'; msg.textContent = 'Selecciona una fecha'; return; 
+      }
+      if (!document.getElementById('invDateError').style.display === 'none') {
+        msg.className = 'msg show error'; msg.textContent = 'Selecciona una fecha'; return; 
+      }
+      document.getElementById('invDateField').classList.remove('error');
+      document.getElementById('invDateError').style.display = 'none';
+
+      if (!time) {
+        document.getElementById('invTimeField').classList.add('error');
+        document.getElementById('invTimeError').style.display = 'block';
+        msg.className = 'msg show error'; msg.textContent = 'Indique el horario'; return; 
+      }
+      if (!document.getElementById('invTimeError').style.display === 'none') {
+        msg.className = 'msg show error'; msg.textContent = 'Indique el horario'; return; 
+      }
+      document.getElementById('invTimeField').classList.remove('error');
+      document.getElementById('invTimeError').style.display = 'none';
       if (!time) { msg.className = 'msg show error'; msg.textContent = 'Indicá el horario'; return; }
       if (!court) { msg.className = 'msg show error'; msg.textContent = 'Indicá la cancha o lugar'; return; }
 
