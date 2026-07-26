@@ -180,6 +180,15 @@ app.get('/api/rules', async (req, res) => {
   }
 });
 
+app.post('/api/rules/seed', async (req, res) => {
+  try {
+    await db.ensureRules();
+    res.json({ ok: true, message: 'Reglas actualizadas' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── SPA fallback ───────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
