@@ -795,14 +795,14 @@
       const base = window.location.origin;
       if (firstPhone) {
         const waTxt =
-`INVITACIÓN DE PÁDEL 🎾
+`INVITACIÓN DE PÁDEL
 
 Te invito a jugar el ${date} a las ${time} en ${court}.
 
-✅ Confirmar: ${base}
-❌ Rechazar: ${base}
+CONFIRMAR: ${base}
+RECHAZAR: ${base}
 
-📱 Padel Match - buscá tu dupla ideal`;
+Padel Match - buscá tu dupla ideal`;
         window.open(`https://wa.me/${firstPhone}?text=${encodeURIComponent(waTxt)}`, '_blank');
       }
       document.getElementById('inviteModal').classList.add('hidden');
