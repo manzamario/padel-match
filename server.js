@@ -205,7 +205,8 @@ app.post('/api/rules/seed', async (req, res) => {
 // ─── ADMIN ──────────────────────────────────────────────
 
 const crypto = require('crypto');
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'M@nza$23&08';
+// ⚠ Para seguridad: crear variable ADMIN_PASSWORD en Render Dashboard
 const adminTokens = new Set();
 
 app.post('/api/admin/login', (req, res) => {
