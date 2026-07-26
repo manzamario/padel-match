@@ -214,7 +214,7 @@ app.get('/api/invitations/:id/respond', async (req, res) => {
             <button type="submit" class="btn btn-green">Aceptar e ingreso</button>
           </form>
         </div>
-        <script>async function submitReg(){const n=document.getElementById('regName').value.trim();if(!n)return;const r=await fetch('/api/invitations/${req.params.id}/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});if(r.ok){location.reload()}else{alert('Error al registrarse')}}</script>
+        <script>async function submitReg(){const n=document.getElementById('regName').value.trim();if(!n)return;const r=await fetch('/api/invitations/${req.params.id}/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});if(r.ok){const d=await r.json();localStorage.setItem('padel_myId',d.playerId);location.href='/';}else{alert('Error al registrarse')}}</script>
       </body></html>`);
       return;
     }
@@ -264,7 +264,7 @@ app.post('/api/invitations/:id/register', async (req, res) => {
     const player = await db.completeRegistration(inv.toPlayer, name.trim());
     if (!player) return res.status(500).json({ error: 'Error al crear perfil' });
     await db.respondInvitation(req.params.id, 'accepted');
-    res.json({ success: true });
+    res.json({ success: true, playerId: player.id });
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
   }
