@@ -193,6 +193,9 @@ app.get('/api/invitations/:id/respond', async (req, res) => {
     const invite = await db.getInvitationWithFrom(req.params.id);
     const base = `${req.protocol}://${req.get('host')}`;
     const isAccepted = status === 'accepted';
+    const acceptMsg = `Hola ${invite.fromName}! Acepté tu invitación para jugar al pádel 🎾 Coordinemos!`;
+    const rejectMsg = `Hola ${invite.fromName}! No voy a poder asistir a tu invitación. Disculpá.`;
+    const waMsg = isAccepted ? acceptMsg : rejectMsg;
     res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Padel Match</title><style>
       *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#0a0a0f;color:#f0f0f5;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
       .card{background:#12121a;border-radius:20px;padding:32px 24px;max-width:400px;width:100%;border:1px solid rgba(255,255,255,0.06);text-align:center}
@@ -210,10 +213,12 @@ app.get('/api/invitations/:id/respond', async (req, res) => {
         <h2>${isAccepted ? '¡Asistencia confirmada!' : 'Invitación rechazada'}</h2>
         <p>${isAccepted ? 'Has confirmado tu asistencia al partido con' : 'Has rechazado la invitación de'}</p>
         <p class="detail">${invite.fromName}</p>
-        ${isAccepted ? `<a class="btn btn-green" href="https://wa.me/${invite.fromPhone}" target="_blank">Contactar por WhatsApp</a>` : ''}
+        <p style="font-size:0.8rem;color:#6b6b80;margin-top:14px;">Notificando al jugador...</p>
+        <a class="btn ${isAccepted ? 'btn-green' : 'btn-red'}" href="https://wa.me/${invite.fromPhone}?text=${encodeURIComponent(waMsg)}" id="waBtn" target="_blank">${isAccepted ? 'Contactar por WhatsApp' : 'Enviar mensaje'}</a>
         <br>
         <a class="btn btn-outline" href="${base}" style="display:inline-block;margin-top:16px;">Ir a Padel Match</a>
       </div>
+      <script>setTimeout(()=>{document.getElementById('waBtn').click()},1500)</script>
     </body></html>`);
   } catch (err) {
     res.status(500).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Error interno</h2></body></html>');
