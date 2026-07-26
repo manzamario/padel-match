@@ -8,6 +8,21 @@ const db = require('./database');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
+
+// Soporte para variables individuales
+const MONGO_USER = process.env.MONGO_USER;
+const MONGO_PASS = process.env.MONGO_PASS;
+const MONGO_HOSTS = process.env.MONGO_HOSTS;
+const MONGO_DB = process.env.MONGO_DB || 'padel-match';
+
+function buildMongoURI() {
+  if (MONGODB_URI) return MONGODB_URI;
+  if (MONGO_USER && MONGO_PASS && MONGO_HOSTS) {
+    return `mongodb://${MONGO_USER}:${MONGO_PASS}@${MONGO_HOSTS}/${MONGO_DB}?ssl=true&replicaSet=atlas-11uadz-shard-0&authSource=admin`;
+  }
+  return 'mongodb://localhost:27017/padel-match';
+}
+
 const MONGODB_OPTIONS = {
   serverSelectionTimeoutMS: 10000,
   connectTimeoutMS: 10000,
@@ -173,13 +188,14 @@ app.get('*', (req, res) => {
 // ─── START ──────────────────────────────────────────────
 async function connectMongo(retries = 5) {
   const uris = [];
-  if (MONGODB_URI) uris.push(MONGODB_URI);
+  const mongoUri = buildMongoURI();
+  if (mongoUri) uris.push(mongoUri);
 
   // Fallback: convertir SRV a directo si es necesario
-  if (MONGODB_URI && MONGODB_URI.startsWith('mongodb+srv://')) {
-    const direct = MONGODB_URI.replace('mongodb+srv://', 'mongodb://')
+  if (mongoUri && mongoUri.startsWith('mongodb+srv://')) {
+    const direct = mongoUri.replace('mongodb+srv://', 'mongodb://')
       .replace(/\.mongodb\.net\/(.*?)(\?|$)/, '.mongodb.net:27017/padel-match?ssl=true&authSource=admin');
-    if (direct !== MONGODB_URI) uris.push(direct);
+    if (direct !== mongoUri) uris.push(direct);
   }
 
   for (const uri of uris) {
