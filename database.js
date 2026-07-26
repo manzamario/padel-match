@@ -3,22 +3,24 @@ const Invitation = require('./models/Invitation');
 const Rule = require('./models/Rule');
 
 const DEFAULT_RULES = [
-  '1. Mantené actualizado tu estado de disponibilidad. Es obligatorio marcar si estás disponible o no antes de aparecer en el listado.',
-  '2. Respondé las invitaciones en menos de 24 horas. Ignorar o dejar en visto se considera falta.',
-  '3. Si rechazás una invitación, se registra automáticamente como rechazo.',
-  '4. Acumular 3 rechazos = suspensión automática por 1 mes. Quedás cesante.',
-  '5. Durante la suspensión no aparecés en el listado ni podés recibir invitaciones.',
-  '6. Si reincidís después de la suspensión, la siguiente será de 3 meses.',
-  '7. Las invitaciones vencen automáticamente a las 24 horas si no se responden, contando como rechazo.',
-  '8. Mantené el respeto. Cualquier falta de respeto puede resultar en expulsión permanente.',
-  '9. Si no contestás o dejás en visto, recibirás una notificación de incumplimiento de normas.'
+  '1. DISPONIBILIDAD OBLIGATORIA: Todo jugador debe mantener actualizado su estado de disponibilidad (disponible/no disponible) en todo momento. Aparecer como "disponible" implica compromiso a responder invitaciones en tiempo y forma.',
+  '2. RESPUESTA A INVITACIONES: Toda invitación recibida debe ser respondida dentro de las 24 horas posteriores a su envío. La falta de respuesta dentro de este plazo se considera automáticamente como rechazo.',
+  '3. RECHAZOS: Rechazar una invitación —ya sea de forma explícita o por vencimiento del plazo— se registra automáticamente como un rechazo en el historial del jugador.',
+  '4. LÍMITE DE RECHAZOS Y SUSPENSIÓN: Al acumular 3 (tres) rechazos, el jugador queda automáticamente suspendido por un período de 30 (treinta) días corridos.',
+  '5. EFECTOS DE LA SUSPENSIÓN: Durante el período de suspensión, el jugador no aparecerá en el listado de jugadores disponibles y no podrá recibir ni enviar invitaciones.',
+  '6. REINCIDENCIA: Si un jugador es suspendido y, tras cumplir la sanción, vuelve a acumular 3 rechazos, la siguiente suspensión será de 90 (noventa) días corridos.',
+  '7. VENCIMIENTO AUTOMÁTICO: Las invitaciones no respondidas dentro de las 24 horas expiran automáticamente y se registran como rechazo, contabilizando en el límite de 3.',
+  '8. CONDUCTA Y RESPETO: Se exige trato respetuoso en todo momento. Cualquier falta de respeto, discriminación, acoso o comportamiento inapropiado será evaluado y puede resultar en suspensión temporal o expulsión permanente de la plataforma.',
+  '9. NOTIFICACIONES DE INCUMPLIMIENTO: Cada vez que un jugador incurra en una falta (rechazo, expiración, conducta inapropiada), recibirá una notificación automática informando la falta cometida y las consecuencias aplicadas.',
+  '10. ADVERTENCIAS: Las suspensiones generan un registro de advertencia en el perfil del jugador. Acumular advertencias puede derivar en sanciones progresivas más severas.',
+  '11. USO DE WHATSAPP: Al aceptar una invitación, se abrirá automáticamente un chat de WhatsApp con el jugador que envió la invitación para coordinar los detalles del partido. El uso de este canal es de exclusiva responsabilidad de los jugadores.',
+  '12. MODIFICACIÓN DE REGLAS: Padel Match se reserva el derecho de modificar estas reglas en cualquier momento. Los cambios serán notificados y publicados en esta sección.'
 ];
 
 async function ensureRules() {
-  const count = await Rule.countDocuments();
-  if (count === 0) {
-    await Rule.insertMany(DEFAULT_RULES.map((content, i) => ({ content, order: i + 1 })));
-  }
+  await Rule.deleteMany({});
+  await Rule.insertMany(DEFAULT_RULES.map((content, i) => ({ content, order: i + 1 })));
+  console.log(`Reglas actualizadas: ${DEFAULT_RULES.length} reglas insertadas`);
 }
 
 // --- PLAYERS ---
