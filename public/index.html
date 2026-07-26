@@ -133,6 +133,15 @@
       border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; font-size: 0.78rem; text-align: center;
     }
 
+    .app-layout { display: flex; gap: 16px; align-items: flex-start; }
+    .app-left { flex: 0 0 320px; min-width: 0; }
+    .app-right { flex: 1; min-width: 0; }
+
+    @media (max-width: 700px) {
+      .app-layout { flex-direction: column; }
+      .app-left { flex: none; width: 100%; }
+    }
+
     .tabs {
       display: flex; gap: 4px; margin-bottom: 14px;
       background: var(--card); border-radius: 14px; padding: 4px; border: 1px solid var(--border);
@@ -329,51 +338,56 @@
         </div>
       </div>
 
-      <div id="statusCard" class="status-card"></div>
       <div id="warnBanner" class="warn-banner hidden"></div>
 
-      <div class="tabs">
-        <button class="tab active" data-tab="playersTab">Jugadores</button>
-        <button class="tab" data-tab="invitationsTab">Invitaciones <span id="invTabCount" class="hidden badge" style="margin-left:4px;font-size:0.6rem;padding:1px 6px;"></span></button>
-        <button class="tab" data-tab="rulesTab">Reglas</button>
-        <button class="tab" data-tab="profileTab">Perfil</button>
-      </div>
+      <div class="app-layout">
+        <!-- LEFT: PROFILE + INVITATIONS + RULES -->
+        <div class="app-left">
+          <div id="statusCard" class="status-card"></div>
 
-      <div id="playersTab" class="tab-content active animate-in">
-        <div class="filters">
-          <select id="filterCategory">
-            <option value="all">Todas las categorías</option>
-            <option value="8">8 - Principiante</option>
-            <option value="7">7 - Baja</option>
-            <option value="6">6 - Media-Baja</option>
-            <option value="5">5 - Media</option>
-            <option value="4">4 - Media-Alta</option>
-            <option value="3">3 - Alta</option>
-            <option value="2">2 - Muy Alta</option>
-            <option value="1">1 - Profesional</option>
-          </select>
-          <input type="text" id="filterName" placeholder="Buscar por nombre..." />
+          <div class="profile-card" style="margin-bottom:12px;" id="miniProfile"></div>
+
+          <div class="tabs" style="margin-bottom:8px;">
+            <button class="tab active" data-tab="invitationsTab">Invitaciones <span id="invTabCount" class="hidden badge" style="margin-left:4px;font-size:0.6rem;padding:1px 6px;"></span></button>
+            <button class="tab" data-tab="rulesTab">Reglas</button>
+          </div>
+          <div id="invitationsTab" class="tab-content active">
+            <div id="invitationsList"><div class="empty-state">Sin invitaciones pendientes</div></div>
+          </div>
+          <div id="rulesTab" class="tab-content">
+            <div class="player-list" id="rulesList"></div>
+          </div>
+
+          <div class="logout-area" style="text-align:left;padding:12px 0;">
+            <button id="logoutBtn" class="btn btn-ghost btn-sm">Salir</button>
+          </div>
         </div>
-        <div style="font-size:0.7rem;color:var(--muted);margin-bottom:10px;">Jugadores disponibles ahora</div>
-        <div id="playerList" class="player-list"></div>
-      </div>
 
-      <div id="invitationsTab" class="tab-content">
-        <div id="invitationsList">
-          <div class="empty-state">Sin invitaciones pendientes</div>
+        <!-- RIGHT: PLAYERS -->
+        <div class="app-right">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <span style="font-size:0.85rem;font-weight:600;">Jugadores disponibles</span>
+            <span id="availableCount" style="font-size:0.75rem;color:var(--muted);">0</span>
+          </div>
+          <div class="filters">
+            <select id="filterCategory">
+              <option value="all">Todas las categorías</option>
+              <option value="8">8 - Principiante</option>
+              <option value="7">7 - Baja</option>
+              <option value="6">6 - Media-Baja</option>
+              <option value="5">5 - Media</option>
+              <option value="4">4 - Media-Alta</option>
+              <option value="3">3 - Alta</option>
+              <option value="2">2 - Muy Alta</option>
+              <option value="1">1 - Profesional</option>
+            </select>
+            <input type="text" id="filterName" placeholder="Buscar..." />
+          </div>
+          <div id="playerList" class="player-list"></div>
+          <div id="multiInviteBar" class="hidden" style="position:sticky;bottom:0;padding:10px 0 16px;background:var(--bg);">
+            <button class="btn btn-primary" id="multiInviteBtn">Invitar seleccionados (<span id="multiCount">0</span>)</button>
+          </div>
         </div>
-      </div>
-
-      <div id="rulesTab" class="tab-content">
-        <div class="player-list" id="rulesList"></div>
-      </div>
-
-      <div id="profileTab" class="tab-content">
-        <div class="profile-card" id="profileContent"></div>
-      </div>
-
-      <div class="logout-area">
-        <button id="logoutBtn" class="btn btn-ghost btn-sm">Salir</button>
       </div>
     </div>
 
@@ -445,6 +459,7 @@
       <div class="modal-handle"></div>
       <div class="modal-title" id="inviteModalTitle">Invitar a jugar</div>
       <div class="modal-sub" id="inviteModalSub">Completá los detalles del partido</div>
+      <div id="inviteTargetList" style="font-size:0.8rem;color:var(--green);margin-bottom:14px;font-weight:500;"></div>
       <div class="modal-field">
         <label>Fecha</label>
         <input type="text" id="invDate" placeholder="Ej: 28/07, mañana, sábado" autocomplete="off" />
@@ -597,12 +612,13 @@
           fetch(`${API}/api/invitations/pending/${myPlayerId}`).then(r => r.json()),
           fetch(`${API}/api/rules`).then(r => r.json())
         ]);
+        window._allPlayersData = players;
         renderHeader(me, pending.length);
         renderStatus(me);
         renderPlayers(players, me);
         renderInvitations(pending);
         renderRules(rules);
-        renderProfile(me);
+        renderMiniProfile(me);
       } catch {}
     }
 
@@ -640,7 +656,7 @@
       else { banner.classList.add('hidden'); }
     }
 
-    let inviteTarget = null;
+    let selectedPlayers = new Set();
 
     function renderPlayers(players, me) {
       const fc = document.getElementById('filterCategory').value;
@@ -650,24 +666,62 @@
       if (fn) filtered = filtered.filter(p => p.name.toLowerCase().includes(fn));
       filtered = filtered.filter(p => p.available && !p.suspended);
       const container = document.getElementById('playerList');
-      if (!filtered.length) { container.innerHTML = '<div class="empty-state">No hay jugadores disponibles ahora</div>'; return; }
+      document.getElementById('availableCount').textContent = filtered.length > 0 ? `${filtered.length} disponibles` : '';
+      if (!filtered.length) { container.innerHTML = '<div class="empty-state">No hay jugadores disponibles ahora</div>'; updateMultiBar(); return; }
       container.innerHTML = filtered.map(p => {
         const isMe = p.id === me.id;
-        return `<div class="player-item">
+        const checked = selectedPlayers.has(p.id) ? 'checked' : '';
+        return `<div class="player-item" style="${isMe ? '' : 'cursor:pointer;'}" onclick="${isMe ? '' : `toggleSelect('${p.id}')`}">
+          ${!isMe ? `<div style="display:flex;align-items:center;padding-right:8px;"><input type="checkbox" class="player-check" data-id="${p.id}" ${checked} onclick="event.stopPropagation();toggleSelect('${p.id}')" style="width:18px;height:18px;accent-color:var(--green);" /></div>` : ''}
           <div class="player-info">
             <div class="player-row"><span class="status-dot online"></span><span class="p-name">${esc(p.name)}${isMe ? '<span class="my-tag">(vos)</span>' : ''}</span></div>
             <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'Sin categoría'}</span>${!isMe ? `<span class="p-phone">${p.phone}</span>` : ''}</div>
           </div>
-          ${!isMe ? `<div class="p-actions"><button class="btn btn-sm btn-success" onclick="openInvite('${p.id}','${esc(p.name)}','${p.phone}')">Invitar</button></div>` : ''}
         </div>`;
       }).join('');
+      // Sync checkboxes with selectedPlayers
+      container.querySelectorAll('.player-check').forEach(cb => {
+        cb.checked = selectedPlayers.has(cb.dataset.id);
+      });
+      updateMultiBar();
     }
 
-    function openInvite(toId, toName, toPhone) {
-      if (!myPlayerId || !toPhone) return;
-      inviteTarget = { id: toId, name: toName, phone: toPhone };
-      document.getElementById('inviteModalTitle').textContent = `Invitar a ${toName}`;
-      document.getElementById('inviteModalSub').textContent = `Completá los detalles del partido`;
+    function toggleSelect(id) {
+      if (selectedPlayers.has(id)) selectedPlayers.delete(id);
+      else selectedPlayers.add(id);
+      const cb = document.querySelector(`.player-check[data-id="${id}"]`);
+      if (cb) cb.checked = selectedPlayers.has(id);
+      updateMultiBar();
+    }
+
+    function updateMultiBar() {
+      const count = selectedPlayers.size;
+      const bar = document.getElementById('multiInviteBar');
+      const btn = document.getElementById('multiInviteBtn');
+      if (count === 0) { bar.classList.add('hidden'); return; }
+      bar.classList.remove('hidden');
+      document.getElementById('multiCount').textContent = count;
+      btn.textContent = count === 1 ? `Enviar invitación` : `Invitar a ${count} jugadores`;
+    }
+
+    document.getElementById('multiInviteBtn').addEventListener('click', () => {
+      if (selectedPlayers.size === 0) return;
+      // Fetch selected player details from the loaded list
+      const allPlayers = document.getElementById('playerList').querySelectorAll('.player-item');
+      const names = [];
+      // We stored selected IDs, now get their names
+      const selectedArr = [];
+      selectedPlayers.forEach(id => {
+        // Get name from the stored player data
+        const p = window._allPlayersData?.find(x => x.id === id);
+        if (p) selectedArr.push(p);
+      });
+      if (selectedArr.length === 0) return;
+      window._inviteTargets = selectedArr;
+      const listStr = selectedArr.map(p => `• ${p.name}`).join('\n');
+      document.getElementById('inviteTargetList').textContent = `Seleccionados: ${selectedArr.map(p => p.name).join(', ')}`;
+      document.getElementById('inviteModalTitle').textContent = `Invitar a ${selectedArr.length} jugador${selectedArr.length > 1 ? 'es' : ''}`;
+      document.getElementById('inviteModalSub').textContent = `Todos reciben la misma invitación`;
       document.getElementById('invDate').value = '';
       document.getElementById('invTime').value = '';
       document.getElementById('invCourt').value = '';
@@ -675,7 +729,7 @@
       document.getElementById('inviteModalMsg').textContent = '';
       document.getElementById('inviteModal').classList.remove('hidden');
       setTimeout(() => document.getElementById('invDate').focus(), 350);
-    }
+    });
 
     document.getElementById('inviteCancelBtn').addEventListener('click', closeInvite);
     document.getElementById('inviteModal').addEventListener('click', function(e) {
@@ -683,11 +737,13 @@
     });
     function closeInvite() {
       document.getElementById('inviteModal').classList.add('hidden');
-      inviteTarget = null;
+      document.getElementById('inviteTargetList').textContent = '';
+      window._inviteTargets = null;
     }
 
     document.getElementById('inviteSendBtn').addEventListener('click', async () => {
-      if (!inviteTarget) return;
+      const targets = window._inviteTargets;
+      if (!targets || targets.length === 0) return;
       const date = document.getElementById('invDate').value.trim();
       const time = document.getElementById('invTime').value.trim();
       const court = document.getElementById('invCourt').value.trim();
@@ -698,41 +754,42 @@
       if (!court) { msg.className = 'msg show error'; msg.textContent = 'Indicá la cancha o lugar'; return; }
 
       const btn = document.getElementById('inviteSendBtn');
-      btn.disabled = true; btn.textContent = 'Enviando...';
-      try {
-        const r = await fetch(`${API}/api/invitations`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fromPlayerId: myPlayerId, toPlayerId: inviteTarget.id })
-        });
-        const d = await r.json();
-        if (!r.ok) { msg.className = 'msg show error'; msg.textContent = d.error || 'Error'; btn.disabled = false; btn.textContent = 'Enviar invitación'; return; }
-        const invId = d._id || d.id;
-        const base = window.location.origin;
-        const acceptLink = `${base}/api/invitations/${invId}/respond?status=accepted`;
-        const rejectLink = `${base}/api/invitations/${invId}/respond?status=rejected`;
-        const whatsappMsg =
+      btn.disabled = true; btn.textContent = `Enviando a ${targets.length}...`;
+      let successCount = 0;
+      let firstPhone = '';
+      let firstName = '';
+      for (const target of targets) {
+        try {
+          const r = await fetch(`${API}/api/invitations`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fromPlayerId: myPlayerId, toPlayerId: target.id })
+          });
+          const d = await r.json();
+          if (r.ok) {
+            successCount++;
+            if (!firstPhone) { firstPhone = target.phone; firstName = target.name; }
+          }
+        } catch {}
+      }
+      if (successCount === 0) { msg.className = 'msg show error'; msg.textContent = 'Error al enviar'; btn.disabled = false; btn.textContent = 'Enviar invitación'; return; }
+      const base = window.location.origin;
+      if (firstPhone) {
+        const waTxt =
 `INVITACIÓN DE PÁDEL 🎾
 
-De: ${inviteTarget.name}
-📅 Fecha: ${date}
-⏰ Hora: ${time}
-📍 Cancha: ${court}
+Te invito a jugar el ${date} a las ${time} en ${court}.
 
-✅ Sí, voy a asistir:
-${acceptLink}
+✅ Confirmar: ${base}
+❌ Rechazar: ${base}
 
-❌ No, no voy a poder:
-${rejectLink}
-
-💬 Respondé este mensaje para coordinar
-
-📱 ¿No estás registrado?
-Creá tu cuenta en Padel Match con tu teléfono para recibir invitaciones.
-${base}`;
-        window.open(`https://wa.me/${inviteTarget.phone}?text=${encodeURIComponent(whatsappMsg)}`, '_blank');
-        document.getElementById('inviteModal').classList.add('hidden');
-        inviteTarget = null;
-        loadApp();
+📱 Padel Match - buscá tu dupla ideal`;
+        window.open(`https://wa.me/${firstPhone}?text=${encodeURIComponent(waTxt)}`, '_blank');
+      }
+      document.getElementById('inviteModal').classList.add('hidden');
+      document.getElementById('inviteTargetList').textContent = '';
+      window._inviteTargets = null;
+      selectedPlayers.clear();
+      loadApp();
       } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; }
       btn.disabled = false; btn.textContent = 'Enviar invitación';
     });
@@ -768,24 +825,23 @@ ${base}`;
       document.getElementById('rulesList').innerHTML = rules.map(r => `<div class="rule-item">${esc(r.content)}</div>`).join('');
     }
 
-    function renderProfile(p) {
+    function renderMiniProfile(p) {
       const cats = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
-      const joined = p.created_at ? new Date(p.created_at).toLocaleDateString('es-AR') : '-';
       const status = p.suspended ? 'Suspendido' : (p.available ? 'Disponible' : 'No disponible');
-      document.getElementById('profileContent').innerHTML = `
-        <div class="profile-row"><span class="profile-label">Nombre</span><span class="profile-value">${esc(p.name)}</span></div>
-        <div class="profile-row"><span class="profile-label">WhatsApp</span><span class="profile-value">${esc(p.phone)}</span></div>
-        <div class="profile-row">
-          <span class="profile-label">Categoría</span>
-          <div class="profile-edit">
-            <span class="profile-value" id="profileCat">${cats[p.category]||'Sin categoría'}</span>
-            <button class="btn btn-sm btn-ghost" onclick="changeCategory()">Cambiar</button>
+      const dot = p.suspended ? 'suspended' : (p.available ? 'online' : 'offline');
+      document.getElementById('miniProfile').innerHTML = `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+          <span class="status-dot ${dot}" style="width:10px;height:10px;"></span>
+          <div>
+            <div style="font-weight:700;font-size:1rem;">${esc(p.name)}</div>
+            <div style="font-size:0.75rem;color:var(--muted);">${cats[p.category]||'Sin categoría'} &middot; ${status}</div>
           </div>
         </div>
-        <div class="profile-row"><span class="profile-label">Estado</span><span class="profile-value">${status}</span></div>
-        <div class="profile-row"><span class="profile-label">Rechazos</span><span class="profile-value">${p.rejections||0}/3</span></div>
-        <div class="profile-row"><span class="profile-label">Advertencias</span><span class="profile-value">${p.warnings||0}</span></div>
-        <div class="profile-row"><span class="profile-label">Registrado</span><span class="profile-value">${joined}</span></div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.75rem;color:var(--muted);border-top:1px solid var(--border);padding-top:10px;">
+          <span>Rechazos: <strong style="color:${p.rejections >= 3 ? 'var(--red)' : 'var(--amber)'}">${p.rejections||0}/3</strong></span>
+          <span>Advertencias: <strong style="color:${p.warnings > 0 ? 'var(--red)' : 'var(--muted)'}">${p.warnings||0}</strong></span>
+          <button class="btn btn-sm btn-ghost" onclick="changeCategory()" style="margin-left:auto;">Cambiar categoría</button>
+        </div>
       `;
     }
 
