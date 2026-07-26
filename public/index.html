@@ -317,8 +317,9 @@
             <option value="2">2 - Muy Alta</option>
             <option value="1">1 - Profesional</option>
           </select>
-          <input type="text" id="filterName" placeholder="Buscar jugador..." />
+          <input type="text" id="filterName" placeholder="Buscar por nombre..." />
         </div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-bottom:10px;">Disponibles ahora &middot; Hacé clic en un jugador para invitarlo</div>
         <div id="playerList" class="player-list"></div>
       </div>
 
@@ -584,36 +585,40 @@
       let filtered = players;
       if (fc !== 'all') filtered = filtered.filter(p => p.category === fc);
       if (fn) filtered = filtered.filter(p => p.name.toLowerCase().includes(fn));
+      filtered = filtered.filter(p => p.available && !p.suspended); // solo disponibles
       const container = document.getElementById('playerList');
-      if (!filtered.length) { container.innerHTML = '<div class="empty-state">No hay jugadores disponibles</div>'; return; }
+      if (!filtered.length) { container.innerHTML = '<div class="empty-state">No hay jugadores disponibles ahora</div>'; return; }
       container.innerHTML = filtered.map(p => {
         const isMe = p.id === me.id;
-        const suspended = p.suspended;
-        const online = p.available && !suspended;
-        const dot = suspended ? 'suspended' : (online ? 'online' : 'offline');
-        const since = p.suspended_until ? new Date(p.suspended_until).toLocaleDateString('es-AR') : '';
-        let actions = '';
-        if (!isMe && !suspended && online) actions = `<button class="btn btn-sm btn-success" onclick="invitePlayer('${p.id}')">Invitar</button>`;
-        return `<div class="player-item ${suspended ? 'suspended' : ''}">
+        const dot = 'online';
+        return `<div class="player-item" style="cursor:pointer;" onclick="${isMe ? '' : `invitePlayer('${p.id}','${esc(p.name)}','${p.phone}')`}">
           <div class="player-info">
             <div class="player-row"><span class="status-dot ${dot}"></span><span class="p-name">${esc(p.name)}${isMe ? '<span class="my-tag">(vos)</span>' : ''}</span></div>
-            <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'Sin categoría'}</span>${!isMe && !suspended ? `<span class="p-phone">${p.phone}</span>` : ''}</div>
+            <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'Sin categoría'}</span>${!isMe ? `<span class="p-phone">${p.phone}</span>` : ''}</div>
           </div>
-          <div class="p-actions">${actions}</div>
+          ${!isMe ? '<div class="p-actions"><span style="font-size:0.7rem;color:var(--green);font-weight:600;">Invitar</span></div>' : ''}
         </div>`;
       }).join('');
     }
 
-    async function invitePlayer(toId) {
-      if (!myPlayerId) return;
+    async function invitePlayer(toId, toName, toPhone) {
+      if (!myPlayerId || !toPhone) return;
+      const fecha = prompt('¿Qué día? (ej: 28/07 o "mañana"):');
+      if (!fecha) return;
+      const hora = prompt('¿A qué hora? (ej: 18:00):');
+      if (!hora) return;
+      const cancha = prompt('¿En qué cancha? (ej: Padel Club Norte):');
+      if (!cancha) return;
       try {
         const r = await fetch(`${API}/api/invitations`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fromPlayerId: myPlayerId, toPlayerId: toId })
         });
         const d = await r.json();
-        if (r.ok) alert('Invitación enviada. Al aceptarla se abrirá WhatsApp.');
-        else alert(d.error || 'Error');
+        if (!r.ok) { alert(d.error || 'Error al enviar invitación'); return; }
+        const msg = `Hola ${toName}! Te invito a jugar al pádel el ${fecha} a las ${hora} en ${cancha}. Confirmame!`;
+        window.open(`https://wa.me/${toPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+        loadApp();
       } catch { alert('Error de conexión'); }
     }
 
