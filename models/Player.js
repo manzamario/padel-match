@@ -9,7 +9,8 @@ const playerSchema = new mongoose.Schema({
   rejections: { type: Number, default: 0 },
   suspended: { type: Boolean, default: false },
   suspendedUntil: { type: Date, default: null },
-  warnings: { type: Number, default: 0 }
+  warnings: { type: Number, default: 0 },
+  isAdmin: { type: Boolean, default: false }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Player', playerSchema);

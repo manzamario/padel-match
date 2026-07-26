@@ -99,6 +99,19 @@ app.put('/api/players/:id/availability', async (req, res) => {
   }
 });
 
+app.patch('/api/players/:id', async (req, res) => {
+  try {
+    const { category } = req.body;
+    if (!category) return res.status(400).json({ error: 'Categoría requerida' });
+    const player = await db.getPlayer(req.params.id);
+    if (!player) return res.status(404).json({ error: 'Jugador no encontrado' });
+    const updated = await db.updateCategory(req.params.id, category);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
 app.delete('/api/players/:id', async (req, res) => {
   try {
     const player = await db.getPlayer(req.params.id);
@@ -186,6 +199,100 @@ app.post('/api/rules/seed', async (req, res) => {
     res.json({ ok: true, message: 'Reglas actualizadas' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── ADMIN ──────────────────────────────────────────────
+
+const crypto = require('crypto');
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const adminTokens = new Set();
+
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  if (password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Contraseña incorrecta' });
+  }
+  const token = crypto.randomBytes(32).toString('hex');
+  adminTokens.add(token);
+  res.json({ token });
+});
+
+function requireAdmin(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ') || !adminTokens.has(auth.slice(7))) {
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+  next();
+}
+
+app.get('/api/admin/players', requireAdmin, async (req, res) => {
+  try {
+    res.json(await db.getAllPlayersFull());
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.put('/api/admin/players/:id/suspend', requireAdmin, async (req, res) => {
+  try {
+    const { days } = req.body;
+    const result = await db.adminSuspendPlayer(req.params.id, days || 30);
+    if (!result) return res.status(404).json({ error: 'Jugador no encontrado' });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.put('/api/admin/players/:id/unsuspend', requireAdmin, async (req, res) => {
+  try {
+    const result = await db.adminUnsuspendPlayer(req.params.id);
+    if (!result) return res.status(404).json({ error: 'Jugador no encontrado' });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.put('/api/admin/players/:id/warning', requireAdmin, async (req, res) => {
+  try {
+    const result = await db.adminAddWarning(req.params.id);
+    if (!result) return res.status(404).json({ error: 'Jugador no encontrado' });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.delete('/api/admin/players/:id', requireAdmin, async (req, res) => {
+  try {
+    const player = await db.getPlayer(req.params.id);
+    if (!player) return res.status(404).json({ error: 'Jugador no encontrado' });
+    await db.deletePlayer(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.put('/api/admin/rules/:id', requireAdmin, async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content) return res.status(400).json({ error: 'Contenido requerido' });
+    const result = await db.updateRule(req.params.id, content);
+    if (!result) return res.status(404).json({ error: 'Regla no encontrada' });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+  try {
+    res.json(await db.getAdminStats());
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
   }
 });
 

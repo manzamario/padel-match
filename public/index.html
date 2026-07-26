@@ -192,6 +192,13 @@
 
     .logout-area { text-align: center; padding: 20px 0; }
 
+    .profile-card { background: var(--card); border-radius: 16px; padding: 20px; border: 1px solid var(--border); }
+    .profile-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    .profile-row:last-child { border-bottom: none; }
+    .profile-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
+    .profile-value { font-size: 0.95rem; font-weight: 500; }
+    .profile-edit { display: flex; gap: 8px; align-items: center; }
+
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     .animate-in { animation: fadeIn 0.4s ease; }
   </style>
@@ -202,7 +209,7 @@
 
   <div class="container">
     <!-- REGISTER -->
-    <div id="registerScreen">
+      <div id="registerScreen">
       <div class="register-inner animate-in">
         <div class="logo-section">
           <div class="logo-mark">&#127934;</div>
@@ -238,6 +245,7 @@
             <button type="submit" class="btn btn-primary" id="regBtn">Crear cuenta</button>
             <div id="regMessage" class="msg"></div>
           </form>
+          <div style="text-align:center;margin-top:16px;"><button id="showAdminLoginBtn" class="btn btn-ghost btn-sm" style="width:auto;font-size:0.7rem;color:var(--muted);">Administración</button></div>
         </div>
       </div>
     </div>
@@ -264,6 +272,7 @@
         <button class="tab active" data-tab="playersTab">Jugadores</button>
         <button class="tab" data-tab="invitationsTab">Invitaciones <span id="invTabCount" class="hidden badge" style="margin-left:4px;font-size:0.6rem;padding:1px 6px;"></span></button>
         <button class="tab" data-tab="rulesTab">Reglas</button>
+        <button class="tab" data-tab="profileTab">Perfil</button>
       </div>
 
       <div id="playersTab" class="tab-content active animate-in">
@@ -294,8 +303,73 @@
         <div class="player-list" id="rulesList"></div>
       </div>
 
+      <div id="profileTab" class="tab-content">
+        <div class="profile-card" id="profileContent"></div>
+      </div>
+
       <div class="logout-area">
         <button id="logoutBtn" class="btn btn-ghost btn-sm">Salir</button>
+      </div>
+    </div>
+
+    <!-- ADMIN LOGIN -->
+    <div id="adminLogin" class="hidden">
+      <div class="register-inner animate-in" style="min-height:100vh;display:flex;align-items:center;padding:40px 0;">
+        <div style="width:100%;max-width:360px;margin:0 auto;">
+          <div class="register-card">
+            <h2>Acceso Administrador</h2>
+            <form id="adminLoginForm">
+              <div class="input-group">
+                <label>Contraseña</label>
+                <input type="password" id="adminPassword" autocomplete="off" placeholder="Contraseña maestra" required />
+              </div>
+              <button type="submit" class="btn btn-primary" id="adminLoginBtn">Ingresar</button>
+              <div id="adminLoginMsg" class="msg"></div>
+            </form>
+            <div style="text-align:center;margin-top:14px;">
+              <button id="backFromAdminLogin" class="btn btn-ghost btn-sm" style="width:auto;">Volver</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADMIN PANEL -->
+    <div id="adminScreen" class="hidden">
+      <div class="top-bar">
+        <div class="container top-bar-inner" style="padding:0;">
+          <h1>Panel <span>Admin</span></h1>
+          <div class="top-actions">
+            <button id="adminLogoutBtn" class="btn btn-sm btn-ghost">Salir</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="adminPlayersTab">Jugadores</button>
+        <button class="tab" data-tab="adminRulesTab">Reglas</button>
+        <button class="tab" data-tab="adminStatsTab">Estadísticas</button>
+      </div>
+
+      <div id="adminPlayersTab" class="tab-content active animate-in">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <input type="text" id="adminSearchPlayer" placeholder="Buscar jugador..." style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:0.8rem;font-family:inherit;background:var(--card);color:var(--text);" />
+          <select id="adminFilterStatus" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:0.8rem;font-family:inherit;background:var(--card);color:var(--text);">
+            <option value="all">Todos</option>
+            <option value="active">Activos</option>
+            <option value="suspended">Suspendidos</option>
+            <option value="online">Disponibles</option>
+          </select>
+        </div>
+        <div id="adminPlayerList" class="player-list"></div>
+      </div>
+
+      <div id="adminRulesTab" class="tab-content">
+        <div id="adminRulesList" class="player-list"></div>
+      </div>
+
+      <div id="adminStatsTab" class="tab-content">
+        <div id="adminStatsContent" class="profile-card"></div>
       </div>
     </div>
   </div>
@@ -383,6 +457,7 @@
         renderPlayers(players, me);
         renderInvitations(pending);
         renderRules(rules);
+        renderProfile(me);
       } catch {}
     }
 
@@ -490,6 +565,42 @@
       document.getElementById('rulesList').innerHTML = rules.map(r => `<div class="rule-item">${esc(r.content)}</div>`).join('');
     }
 
+    function renderProfile(p) {
+      const cats = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
+      const joined = p.created_at ? new Date(p.created_at).toLocaleDateString('es-AR') : '-';
+      const status = p.suspended ? 'Suspendido' : (p.available ? 'Disponible' : 'No disponible');
+      document.getElementById('profileContent').innerHTML = `
+        <div class="profile-row"><span class="profile-label">Nombre</span><span class="profile-value">${esc(p.name)}</span></div>
+        <div class="profile-row"><span class="profile-label">WhatsApp</span><span class="profile-value">${esc(p.phone)}</span></div>
+        <div class="profile-row">
+          <span class="profile-label">Categoría</span>
+          <div class="profile-edit">
+            <span class="profile-value" id="profileCat">${cats[p.category]||'Sin categoría'}</span>
+            <button class="btn btn-sm btn-ghost" onclick="changeCategory()">Cambiar</button>
+          </div>
+        </div>
+        <div class="profile-row"><span class="profile-label">Estado</span><span class="profile-value">${status}</span></div>
+        <div class="profile-row"><span class="profile-label">Rechazos</span><span class="profile-value">${p.rejections||0}/3</span></div>
+        <div class="profile-row"><span class="profile-label">Advertencias</span><span class="profile-value">${p.warnings||0}</span></div>
+        <div class="profile-row"><span class="profile-label">Registrado</span><span class="profile-value">${joined}</span></div>
+      `;
+    }
+
+    async function changeCategory() {
+      const cats = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
+      const opts = Object.entries(cats).map(([k,v]) => `<option value="${k}">${v}</option>`).join('');
+      const sel = prompt('Seleccioná tu nueva categoría (1-8):\n\n1: Profesional\n2: Muy Alta\n3: Alta\n4: Media-Alta\n5: Media\n6: Media-Baja\n7: Baja\n8: Principiante');
+      if (!sel || !cats[sel]) return;
+      try {
+        const r = await fetch(`${API}/api/players/${myPlayerId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: sel })
+        });
+        if (r.ok) { document.getElementById('profileCat').textContent = cats[sel]; loadApp(); }
+        else alert('Error al cambiar categoría');
+      } catch { alert('Error de conexión'); }
+    }
+
     document.querySelectorAll('.tab').forEach(t => {
       t.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -505,6 +616,189 @@
     document.getElementById('filterName').addEventListener('input', loadApp);
 
     function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+    // ═══════════════ ADMIN ═══════════════
+    let adminToken = localStorage.getItem('padel_adminToken');
+
+    document.getElementById('showAdminLoginBtn').addEventListener('click', () => {
+      document.getElementById('registerScreen').classList.add('hidden');
+      document.getElementById('adminLogin').hidden = false;
+      document.getElementById('adminLogin').classList.remove('hidden');
+    });
+
+    document.getElementById('backFromAdminLogin').addEventListener('click', () => {
+      document.getElementById('adminLogin').classList.add('hidden');
+      document.getElementById('registerScreen').hidden = false;
+      document.getElementById('registerScreen').classList.remove('hidden');
+    });
+
+    document.getElementById('adminLoginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const pass = document.getElementById('adminPassword');
+      const btn = document.getElementById('adminLoginBtn');
+      const msg = document.getElementById('adminLoginMsg');
+      btn.disabled = true; btn.textContent = 'Ingresando...';
+      try {
+        const r = await fetch(`${API}/api/admin/login`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pass.value })
+        });
+        const d = await r.json();
+        if (!r.ok) { msg.className = 'msg show error'; msg.textContent = d.error; btn.disabled = false; btn.textContent = 'Ingresar'; return; }
+        adminToken = d.token;
+        localStorage.setItem('padel_adminToken', adminToken);
+        document.getElementById('adminLogin').classList.add('hidden');
+        document.getElementById('adminScreen').classList.remove('hidden');
+        loadAdminPanel();
+      } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; }
+      btn.disabled = false; btn.textContent = 'Ingresar';
+    });
+
+    document.getElementById('adminLogoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('padel_adminToken');
+      adminToken = null;
+      document.getElementById('adminScreen').classList.add('hidden');
+      document.getElementById('registerScreen').hidden = false;
+      document.getElementById('registerScreen').classList.remove('hidden');
+    });
+
+    async function loadAdminPanel() {
+      if (!adminToken) return;
+      loadAdminPlayers();
+      loadAdminRules();
+      loadAdminStats();
+    }
+
+    async function loadAdminPlayers() {
+      try {
+        const r = await fetch(`${API}/api/admin/players`, { headers: { 'Authorization': `Bearer ${adminToken}` } });
+        if (r.status === 401) { alert('Sesión expirada'); document.getElementById('adminLogoutBtn').click(); return; }
+        const players = await r.json();
+        const search = document.getElementById('adminSearchPlayer').value.toLowerCase().trim();
+        const filter = document.getElementById('adminFilterStatus').value;
+        let filtered = players;
+        if (search) filtered = filtered.filter(p => p.name.toLowerCase().includes(search) || p.phone.includes(search));
+        if (filter === 'active') filtered = filtered.filter(p => !p.suspended);
+        else if (filter === 'suspended') filtered = filtered.filter(p => p.suspended);
+        else if (filter === 'online') filtered = filtered.filter(p => p.available && !p.suspended);
+        const container = document.getElementById('adminPlayerList');
+        if (!filtered.length) { container.innerHTML = '<div class="empty-state">Sin resultados</div>'; return; }
+        container.innerHTML = filtered.map(p => {
+          const dot = p.suspended ? 'suspended' : (p.available ? 'online' : 'offline');
+          const since = p.suspended_until || p.suspendedUntil ? new Date(p.suspended_until || p.suspendedUntil).toLocaleDateString('es-AR') : '';
+          const created = p.created_at || p.createdAt ? new Date(p.created_at || p.createdAt).toLocaleDateString('es-AR') : '-';
+          return `<div class="player-item ${p.suspended ? 'suspended' : ''}" style="flex-wrap:wrap;">
+            <div class="player-info" style="min-width:0;">
+              <div class="player-row"><span class="status-dot ${dot}"></span><span class="p-name">${esc(p.name)}</span></div>
+              <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'N/A'}</span><span class="p-phone">${esc(p.phone)}</span></div>
+              <div class="player-row" style="font-size:0.7rem;color:var(--muted);gap:8px;">
+                <span>Rechazos: ${p.rejections||0}/3</span>
+                <span>Advertencias: ${p.warnings||0}</span>
+                <span>Reg: ${created}</span>
+                ${p.suspended ? `<span style="color:var(--red);">Hasta: ${since}</span>` : ''}
+              </div>
+            </div>
+            <div class="p-actions" style="flex-wrap:wrap;">
+              ${p.suspended
+                ? `<button class="btn btn-sm btn-ghost" onclick="adminUnsuspend('${p.id}')">Restaurar</button>`
+                : `<button class="btn btn-sm btn-ghost" onclick="adminSuspend('${p.id}')">Suspender</button>`
+              }
+              <button class="btn btn-sm btn-ghost" onclick="adminWarn('${p.id}')">Advertir</button>
+              <button class="btn btn-sm btn-danger" onclick="adminDelete('${p.id}','${esc(p.name)}')">Eliminar</button>
+            </div>
+          </div>`;
+        }).join('');
+      } catch {}
+    }
+
+    async function adminSuspend(id) {
+      const days = prompt('Días de suspensión:', '30');
+      if (!days || isNaN(days)) return;
+      const r = await fetch(`${API}/api/admin/players/${id}/suspend`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify({ days: parseInt(days) })
+      });
+      if (r.ok) loadAdminPlayers(); else alert('Error');
+    }
+
+    async function adminUnsuspend(id) {
+      if (!confirm('¿Restaurar este jugador?')) return;
+      const r = await fetch(`${API}/api/admin/players/${id}/unsuspend`, {
+        method: 'PUT', headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      if (r.ok) loadAdminPlayers(); else alert('Error');
+    }
+
+    async function adminWarn(id) {
+      if (!confirm('¿Agregar advertencia a este jugador?')) return;
+      const r = await fetch(`${API}/api/admin/players/${id}/warning`, {
+        method: 'PUT', headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      if (r.ok) loadAdminPlayers(); else alert('Error');
+    }
+
+    async function adminDelete(id, name) {
+      if (!confirm(`¿Eliminar permanentemente a ${name}? Esta acción no se puede deshacer.`)) return;
+      const r = await fetch(`${API}/api/admin/players/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${adminToken}` } });
+      if (r.ok) loadAdminPlayers(); else alert('Error');
+    }
+
+    async function loadAdminRules() {
+      try {
+        const r = await fetch(`${API}/api/rules`);
+        const rules = await r.json();
+        const container = document.getElementById('adminRulesList');
+        container.innerHTML = rules.map(rule => `
+          <div class="rule-item" style="display:flex;flex-direction:column;gap:6px;padding:12px 0;">
+            <div style="font-size:0.8rem;line-height:1.5;color:var(--text);">${esc(rule.content)}</div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-sm btn-ghost" onclick="editAdminRule('${rule.id}','${esc(rule.content)}')">Editar</button>
+            </div>
+          </div>
+        `).join('');
+      } catch {}
+    }
+
+    async function editAdminRule(id, current) {
+      const content = prompt('Editar regla:', current);
+      if (!content || content === current) return;
+      const r = await fetch(`${API}/api/admin/rules/${id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify({ content })
+      });
+      if (r.ok) loadAdminRules(); else alert('Error');
+    }
+
+    async function loadAdminStats() {
+      try {
+        const r = await fetch(`${API}/api/admin/stats`, { headers: { 'Authorization': `Bearer ${adminToken}` } });
+        const s = await r.json();
+        document.getElementById('adminStatsContent').innerHTML = `
+          <div class="profile-row"><span class="profile-label">Jugadores totales</span><span class="profile-value">${s.totalPlayers}</span></div>
+          <div class="profile-row"><span class="profile-label">Disponibles ahora</span><span class="profile-value" style="color:var(--green);">${s.activePlayers}</span></div>
+          <div class="profile-row"><span class="profile-label">Suspendidos</span><span class="profile-value" style="color:var(--red);">${s.suspendedPlayers}</span></div>
+          <div class="profile-row"><span class="profile-label">Con advertencias</span><span class="profile-value" style="color:var(--amber);">${s.warnedPlayers}</span></div>
+          <div class="profile-row"><span class="profile-label">Invitaciones pendientes</span><span class="profile-value">${s.pendingInvitations}</span></div>
+          <div class="profile-row"><span class="profile-label">Invitaciones totales</span><span class="profile-value">${s.totalInvitations}</span></div>
+        `;
+      } catch {}
+    }
+
+    // Admin search/filter
+    document.getElementById('adminSearchPlayer').addEventListener('input', loadAdminPlayers);
+    document.getElementById('adminFilterStatus').addEventListener('change', loadAdminPlayers);
+
+    // Tab switching for admin
+    document.querySelectorAll('#adminScreen .tab').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('#adminScreen .tab').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('#adminScreen .tab-content').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        const el = document.getElementById(t.dataset.tab);
+        el.classList.add('active');
+        el.classList.add('animate-in');
+      });
+    });
 
     init();
   </script>

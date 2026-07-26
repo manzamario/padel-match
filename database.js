@@ -63,6 +63,11 @@ async function addRejection(id) {
   return p.toObject();
 }
 
+async function updateCategory(id, category) {
+  const p = await Player.findByIdAndUpdate(id, { category }, { new: true });
+  return p ? p.toObject() : null;
+}
+
 async function checkAndUnsuspend() {
   await Player.updateMany(
     { suspended: true, suspendedUntil: { $lte: new Date() } },
@@ -153,10 +158,58 @@ async function getRules() {
   return rules.map(r => ({ id: r._id, content: r.content }));
 }
 
+// --- ADMIN ---
+async function getAllPlayersFull() {
+  const players = await Player.find().sort({ name: 1 }).lean();
+  return players.map(p => ({ ...p, id: p._id.toString() }));
+}
+
+async function adminSuspendPlayer(id, days) {
+  const until = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  const p = await Player.findByIdAndUpdate(id,
+    { suspended: true, suspendedUntil: until, rejections: 3 },
+    { new: true }
+  );
+  return p ? { ...p.toObject(), id: p._id.toString() } : null;
+}
+
+async function adminUnsuspendPlayer(id) {
+  const p = await Player.findByIdAndUpdate(id,
+    { suspended: false, suspendedUntil: null, rejections: 0 },
+    { new: true }
+  );
+  return p ? { ...p.toObject(), id: p._id.toString() } : null;
+}
+
+async function adminAddWarning(id) {
+  const p = await Player.findById(id);
+  if (!p) return null;
+  p.warnings = (p.warnings || 0) + 1;
+  await p.save();
+  return { ...p.toObject(), id: p._id.toString() };
+}
+
+async function updateRule(id, content) {
+  const r = await Rule.findByIdAndUpdate(id, { content }, { new: true });
+  return r ? { id: r._id.toString(), content: r.content } : null;
+}
+
+async function getAdminStats() {
+  const totalPlayers = await Player.countDocuments();
+  const activePlayers = await Player.countDocuments({ available: true, suspended: false });
+  const suspendedPlayers = await Player.countDocuments({ suspended: true });
+  const pendingInvitations = await Invitation.countDocuments({ status: 'pending' });
+  const totalInvitations = await Invitation.countDocuments();
+  const warnedPlayers = await Player.countDocuments({ warnings: { $gt: 0 } });
+  return { totalPlayers, activePlayers, suspendedPlayers, pendingInvitations, totalInvitations, warnedPlayers };
+}
+
 module.exports = {
   ensureRules,
   createPlayer, getPlayer, getAllPlayers, findPlayerByPhone,
   toggleAvailability, addRejection, checkAndUnsuspend, deletePlayer, resetPlayer,
   createInvitation, getInvitation, getPendingInvitationsForPlayer, getSentInvitations,
-  respondInvitation, getInvitationStats, getRules
+  respondInvitation, getInvitationStats, getRules, updateCategory,
+  getAllPlayersFull, adminSuspendPlayer, adminUnsuspendPlayer, adminAddWarning,
+  updateRule, getAdminStats
 };
