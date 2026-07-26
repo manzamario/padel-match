@@ -171,11 +171,16 @@ app.get('*', (req, res) => {
 });
 
 // ─── START ──────────────────────────────────────────────
-const MONGO_DIRECT = 'mongodb://padel_user:PadelMatch2024@ac-erfscf9-shard-00-00.ztty11j.mongodb.net:27017,ac-erfscf9-shard-00-01.ztty11j.mongodb.net:27017,ac-erfscf9-shard-00-02.ztty11j.mongodb.net:27017/padel-match?ssl=true&replicaSet=atlas-11uadz-shard-0&authSource=admin';
-
 async function connectMongo(retries = 5) {
-  const uris = [MONGO_DIRECT];
-  if (MONGODB_URI && MONGODB_URI !== MONGO_DIRECT) uris.push(MONGODB_URI);
+  const uris = [];
+  if (MONGODB_URI) uris.push(MONGODB_URI);
+
+  // Fallback: convertir SRV a directo si es necesario
+  if (MONGODB_URI && MONGODB_URI.startsWith('mongodb+srv://')) {
+    const direct = MONGODB_URI.replace('mongodb+srv://', 'mongodb://')
+      .replace(/\.mongodb\.net\/(.*?)(\?|$)/, '.mongodb.net:27017/padel-match?ssl=true&authSource=admin');
+    if (direct !== MONGODB_URI) uris.push(direct);
+  }
 
   for (const uri of uris) {
     for (let i = 1; i <= retries; i++) {
