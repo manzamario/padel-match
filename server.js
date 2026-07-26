@@ -77,6 +77,16 @@ app.get('/api/players', async (req, res) => {
   }
 });
 
+app.get('/api/players/by-phone/:phone', async (req, res) => {
+  try {
+    const player = await db.findPlayerByPhone(req.params.phone);
+    if (!player) return res.status(404).json({ error: 'No encontrado' });
+    res.json({ id: player._id.toString() });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
 app.get('/api/players/:id', async (req, res) => {
   try {
     const player = await db.getPlayer(req.params.id);

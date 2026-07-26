@@ -208,7 +208,7 @@
   <div class="bg-glow-2"></div>
 
   <div class="container">
-    <!-- REGISTER -->
+    <!-- REGISTER / LOGIN -->
       <div id="registerScreen">
       <div class="register-inner animate-in">
         <div class="logo-section">
@@ -216,10 +216,12 @@
           <h1>Padel <span>Match</span></h1>
           <p>Encontrá tu dupla ideal</p>
         </div>
-        <div class="register-card">
-          <h2>Crear cuenta</h2>
+
+        <!-- REGISTER FORM -->
+        <div class="register-card" id="registerCard">
+          <h2 id="registerTitle">Crear cuenta</h2>
           <form id="registerForm">
-            <div class="input-group">
+            <div class="input-group" id="nameGroup">
               <label>Nombre <span class="req">*</span></label>
               <input type="text" id="regName" autocomplete="name" placeholder="Tu nombre" required />
             </div>
@@ -228,7 +230,7 @@
               <input type="tel" id="regPhone" autocomplete="tel" inputmode="numeric" placeholder="5491123456789" required />
               <div class="input-hint">Código de país + número sin espacios</div>
             </div>
-            <div class="input-group">
+            <div class="input-group" id="categoryGroup">
               <label>Categoría <span class="req">*</span></label>
               <select id="regCategory" required>
                 <option value="">Seleccioná</option>
@@ -245,7 +247,29 @@
             <button type="submit" class="btn btn-primary" id="regBtn">Crear cuenta</button>
             <div id="regMessage" class="msg"></div>
           </form>
-          <div style="text-align:center;margin-top:16px;"><button id="showAdminLoginBtn" class="btn btn-ghost btn-sm" style="width:auto;font-size:0.7rem;color:var(--muted);">Administración</button></div>
+          <div style="text-align:center;margin-top:14px;">
+            <button id="switchToLogin" class="btn btn-ghost btn-sm" style="width:auto;">Ya tengo cuenta &rarr;</button>
+          </div>
+          <div style="text-align:center;margin-top:8px;">
+            <button id="showAdminLoginBtn" class="btn btn-ghost btn-sm" style="width:auto;font-size:0.7rem;color:var(--muted);">Administración</button>
+          </div>
+        </div>
+
+        <!-- LOGIN FORM -->
+        <div class="register-card hidden" id="loginCard">
+          <h2>Iniciar sesión</h2>
+          <form id="loginForm">
+            <div class="input-group">
+              <label>WhatsApp <span class="req">*</span></label>
+              <input type="tel" id="loginPhone" autocomplete="tel" inputmode="numeric" placeholder="5491123456789" required />
+              <div class="input-hint">Ingresá el mismo número que usaste al registrarte</div>
+            </div>
+            <button type="submit" class="btn btn-primary" id="loginBtn">Ingresar</button>
+            <div id="loginMessage" class="msg"></div>
+          </form>
+          <div style="text-align:center;margin-top:14px;">
+            <button id="switchToRegister" class="btn btn-ghost btn-sm" style="width:auto;">&larr; Crear cuenta nueva</button>
+          </div>
         </div>
       </div>
     </div>
@@ -391,6 +415,10 @@
       document.getElementById('registerScreen').hidden = false;
       document.getElementById('registerScreen').classList.remove('hidden');
       document.getElementById('appScreen').classList.add('hidden');
+      document.getElementById('adminLogin').classList.add('hidden');
+      document.getElementById('adminScreen').classList.add('hidden');
+      document.getElementById('registerCard').classList.remove('hidden');
+      document.getElementById('loginCard').classList.add('hidden');
     }
 
     function showApp() {
@@ -400,6 +428,17 @@
       setInterval(loadApp, 15000);
     }
 
+    // Switch between register and login
+    document.getElementById('switchToLogin').addEventListener('click', () => {
+      document.getElementById('registerCard').classList.add('hidden');
+      document.getElementById('loginCard').classList.remove('hidden');
+    });
+    document.getElementById('switchToRegister').addEventListener('click', () => {
+      document.getElementById('loginCard').classList.add('hidden');
+      document.getElementById('registerCard').classList.remove('hidden');
+    });
+
+    // REGISTER
     document.getElementById('registerForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const name = document.getElementById('regName');
@@ -420,11 +459,9 @@
         });
         const data = await r.json();
         if (!r.ok) {
-          if (r.status === 409 && data.player) {
-            if (confirm('Ya existe una cuenta con ese teléfono. ¿Eres tú?')) {
-              myPlayerId = data.player.id; localStorage.setItem('padel_myId', myPlayerId);
-              showApp(); return;
-            }
+          if (r.status === 409) {
+            msg.className = 'msg show error'; msg.textContent = 'Este teléfono ya está registrado. Usá "Ya tengo cuenta" para iniciar sesión.';
+            btn.disabled = false; btn.textContent = 'Crear cuenta'; return;
           }
           msg.className = 'msg show error'; msg.textContent = data.error || 'Error';
           btn.disabled = false; btn.textContent = 'Crear cuenta'; return;
@@ -433,6 +470,29 @@
         showApp();
       } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; }
       btn.disabled = false; btn.textContent = 'Crear cuenta';
+    });
+
+    // LOGIN
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const phone = document.getElementById('loginPhone');
+      const msg = document.getElementById('loginMessage');
+      const btn = document.getElementById('loginBtn');
+      const clean = phone.value.trim().replace(/\s/g,'');
+      if (!/^\d{7,15}$/.test(clean)) { msg.className = 'msg show error'; msg.textContent = 'Teléfono inválido.'; return; }
+      btn.disabled = true; btn.textContent = 'Buscando...';
+      try {
+        const r = await fetch(`${API}/api/players/by-phone/${clean}`);
+        if (r.status === 404) {
+          msg.className = 'msg show error'; msg.textContent = 'No hay cuenta con ese teléfono. Creá una cuenta nueva.';
+          btn.disabled = false; btn.textContent = 'Ingresar'; return;
+        }
+        if (!r.ok) { msg.className = 'msg show error'; msg.textContent = 'Error del servidor'; btn.disabled = false; btn.textContent = 'Ingresar'; return; }
+        const data = await r.json();
+        myPlayerId = data.id; localStorage.setItem('padel_myId', myPlayerId);
+        showApp();
+      } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; }
+      btn.disabled = false; btn.textContent = 'Ingresar';
     });
 
     document.getElementById('logoutBtn').addEventListener('click', () => {
