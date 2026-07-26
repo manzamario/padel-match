@@ -981,7 +981,7 @@ Te invito a jugar el ${date} a las ${time} en ${court}.
           const created = p.created_at || p.createdAt ? new Date(p.created_at || p.createdAt).toLocaleDateString('es-AR') : '-';
           return `<div class="player-item ${p.suspended ? 'suspended' : ''}" style="flex-wrap:wrap;">
             <div class="player-info" style="min-width:0;">
-              <div class="player-row"><span class="status-dot ${dot}"></span><span class="p-name">${esc(p.name)}</span>${!p.isComplete ? '<span style="font-size:0.6rem;background:var(--amber);color:#000;padding:1px 5px;border-radius:5px;margin-left:4px;">PENDIENTE</span>' : ''}</div>
+              <div class="player-row"><span class="status-dot ${dot}"></span><span class="p-name">${esc(p.name)}</span>${!p.isComplete && !p.name ? '<span style="font-size:0.6rem;background:var(--amber);color:#000;padding:1px 5px;border-radius:5px;margin-left:4px;">PENDIENTE</span>' : ''}</div>
               <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'N/A'}</span><span class="p-phone">${esc(p.phone)}</span></div>
               <div class="player-row" style="font-size:0.7rem;color:var(--muted);gap:8px;">
                 <span>Rechazos: ${p.rejections||0}/3</span>
