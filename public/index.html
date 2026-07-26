@@ -678,7 +678,7 @@
       let filtered = players;
       if (fc !== 'all') filtered = filtered.filter(p => p.category === fc);
       if (fn) filtered = filtered.filter(p => p.name.toLowerCase().includes(fn));
-      filtered = filtered.filter(p => p.available && !p.suspended && p.id !== me.id && p.isComplete);
+      filtered = filtered.filter(p => p.available && !p.suspended && p.id !== me.id && p.name);
       const container = document.getElementById('playerList');
       document.getElementById('availableCount').textContent = filtered.length > 0 ? `${filtered.length} disponibles` : '';
       if (!filtered.length) { container.innerHTML = '<div class="empty-state">No hay jugadores disponibles ahora</div>'; updateMultiBar(); return; }
