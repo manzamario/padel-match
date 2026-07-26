@@ -11,6 +11,12 @@ const playerSchema = new mongoose.Schema({
   suspendedUntil: { type: Date, default: null },
   warnings: { type: Number, default: 0 },
   isAdmin: { type: Boolean, default: false }
-}, { timestamps: true });
+}, {
+  timestamps: true,
+  toObject: { virtuals: true },
+  toJSON: { virtuals: true }
+});
+
+playerSchema.virtual('id').get(function() { return this._id; });
 
 module.exports = mongoose.model('Player', playerSchema);
