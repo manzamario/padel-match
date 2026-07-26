@@ -186,10 +186,9 @@ app.get('/api/invitations/:id/respond', async (req, res) => {
     if (!['accepted', 'rejected'].includes(status)) {
       return res.status(400).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Enlace inválido</h2></body></html>');
     }
-    const inv = await db.getInvitation(req.params.id);
+     const inv = await db.getInvitation(req.params.id);
     if (!inv) return res.status(404).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Invitación no encontrada</h2></body></html>');
     if (inv.status !== 'pending') return res.status(400).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Esta invitación ya fue respondida</h2></body></html>');
-    const base = `${req.protocol}://${req.get('host')}`;
     const toPlayer = await Player.findById(inv.toPlayer);
     if (status === 'accepted' && (!toPlayer || !toPlayer.isComplete)) {
       res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Padel Match</title><style>
