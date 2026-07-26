@@ -268,8 +268,8 @@
           </div>
           <div class="input-group">
             <label>WhatsApp <span class="req">*</span></label>
-            <input type="tel" id="regPhone" autocomplete="tel" inputmode="numeric" placeholder="5491123456789" />
-            <div class="input-hint">Código de país + número (ej: 5491123456789)</div>
+            <input type="tel" id="regPhone" autocomplete="tel" inputmode="numeric" placeholder="+543725430303" />
+            <div class="input-hint">Ej: +543725430303 o 3725430303</div>
           </div>
           <div class="input-group">
             <label>Categoría <span class="req">*</span></label>
@@ -300,8 +300,8 @@
           <h2>Iniciar sesión</h2>
           <div class="input-group">
             <label>WhatsApp <span class="req">*</span></label>
-            <input type="tel" id="loginPhone" autocomplete="tel" inputmode="numeric" placeholder="5491123456789" />
-            <div class="input-hint">Ingresá el mismo número que usaste al registrarte</div>
+            <input type="tel" id="loginPhone" autocomplete="tel" inputmode="numeric" placeholder="+543725430303" />
+            <div class="input-hint">Ej: +543725430303 o 3725430303</div>
           </div>
           <button class="btn btn-primary" id="loginBtn" onclick="doLoginSearch()">Buscar</button>
           <div id="loginMessage" class="msg"></div>
@@ -528,8 +528,9 @@
 
       if (!name.value.trim()) { msg.className = 'msg show error'; msg.textContent = 'Escribí tu nombre'; return; }
       if (!category.value) { msg.className = 'msg show error'; msg.textContent = 'Seleccioná una categoría'; return; }
-      const clean = phone.value.trim().replace(/\s/g, '');
-      if (!/^\d{7,15}$/.test(clean)) { msg.className = 'msg show error'; msg.textContent = 'Teléfono inválido (solo números, ej: 5491123456789)'; return; }
+      let clean = phone.value.trim().replace(/\s/g, '');
+      if (!/^\+?\d{7,15}$/.test(clean)) { msg.className = 'msg show error'; msg.textContent = 'Teléfono inválido (ej: +543725430303)'; return; }
+      clean = normalizePhone(clean);
 
       btn.disabled = true; btn.textContent = 'Creando...';
       try {
@@ -562,12 +563,13 @@
       const msgEl = document.getElementById('loginMessage');
       const btn = document.getElementById('loginBtn');
       const info = document.getElementById('loginResult');
-      const clean = phone.value.trim().replace(/\s/g, '');
+      let clean = phone.value.trim().replace(/\s/g, '');
       msgEl.className = 'msg'; msgEl.textContent = '';
       info.classList.add('hidden');
       foundPlayerId = null;
 
-      if (!/^\d{7,15}$/.test(clean)) { msgEl.className = 'msg show error'; msgEl.textContent = 'Teléfono inválido'; return; }
+      if (!/^\+?\d{7,15}$/.test(clean)) { msgEl.className = 'msg show error'; msgEl.textContent = 'Teléfono inválido (ej: +543725430303)'; return; }
+      clean = normalizePhone(clean);
       btn.disabled = true; btn.textContent = 'Buscando...';
       try {
         const r = await fetch(`${API}/api/players/by-phone/${clean}`);
@@ -878,6 +880,12 @@ Te invito a jugar el ${date} a las ${time} en ${court}.
     document.getElementById('filterName').addEventListener('input', loadApp);
 
     function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+    function normalizePhone(p) {
+      p = p.replace(/^\+/, '');
+      if (p.startsWith('54') && p.length > 10) p = p.slice(2);
+      return p;
+    }
 
     // ═══════════════ ADMIN ═══════════════
     let adminToken = localStorage.getItem('padel_adminToken');
