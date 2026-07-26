@@ -200,7 +200,42 @@
     .profile-edit { display: flex; gap: 8px; align-items: center; }
 
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeOverlay { from { opacity: 0; } to { opacity: 1; } }
     .animate-in { animation: fadeIn 0.4s ease; }
+
+    /* ─── MODAL ─── */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 999;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      display: flex; align-items: flex-end; justify-content: center;
+      animation: fadeOverlay 0.2s ease;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal-sheet {
+      width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto;
+      background: var(--card); border-radius: 24px 24px 0 0; padding: 24px 20px 32px;
+      border-top: 1px solid var(--border);
+      animation: slideUp 0.3s ease;
+    }
+    .modal-handle {
+      width: 40px; height: 4px; border-radius: 4px; background: rgba(255,255,255,0.15);
+      margin: 0 auto 16px;
+    }
+    .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+    .modal-sub { font-size: 0.82rem; color: var(--muted); margin-bottom: 20px; }
+    .modal-field { margin-bottom: 14px; }
+    .modal-field label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+    .modal-field input, .modal-field select {
+      width: 100%; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px;
+      font-size: 0.95rem; font-family: inherit; background: rgba(255,255,255,0.04); color: var(--text);
+      transition: 0.2s; -webkit-appearance: none;
+    }
+    .modal-field input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(37,211,102,0.08); }
+    .modal-field input::placeholder { color: rgba(255,255,255,0.15); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .modal-actions .btn { flex: 1; }
   </style>
 </head>
 <body>
@@ -319,7 +354,7 @@
           </select>
           <input type="text" id="filterName" placeholder="Buscar por nombre..." />
         </div>
-        <div style="font-size:0.7rem;color:var(--muted);margin-bottom:10px;">Disponibles ahora &middot; Hacé clic en un jugador para invitarlo</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-bottom:10px;">Jugadores disponibles ahora</div>
         <div id="playerList" class="player-list"></div>
       </div>
 
@@ -401,6 +436,32 @@
       <div id="adminStatsTab" class="tab-content">
         <div id="adminStatsContent" class="profile-card"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- INVITE MODAL -->
+  <div id="inviteModal" class="modal-overlay hidden">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="inviteModalTitle">Invitar a jugar</div>
+      <div class="modal-sub" id="inviteModalSub">Completá los detalles del partido</div>
+      <div class="modal-field">
+        <label>Fecha</label>
+        <input type="text" id="invDate" placeholder="Ej: 28/07, mañana, sábado" autocomplete="off" />
+      </div>
+      <div class="modal-field">
+        <label>Horario</label>
+        <input type="text" id="invTime" placeholder="Ej: 18:00, 10:30" autocomplete="off" />
+      </div>
+      <div class="modal-field">
+        <label>Cancha / Lugar</label>
+        <input type="text" id="invCourt" placeholder="Ej: Padel Club Norte, cancha 3" autocomplete="off" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="inviteCancelBtn">Cancelar</button>
+        <button class="btn btn-primary" id="inviteSendBtn">Enviar invitación</button>
+      </div>
+      <div id="inviteModalMsg" class="msg" style="margin-top:10px;"></div>
     </div>
   </div>
 
@@ -579,48 +640,80 @@
       else { banner.classList.add('hidden'); }
     }
 
+    let inviteTarget = null;
+
     function renderPlayers(players, me) {
       const fc = document.getElementById('filterCategory').value;
       const fn = document.getElementById('filterName').value.toLowerCase().trim();
       let filtered = players;
       if (fc !== 'all') filtered = filtered.filter(p => p.category === fc);
       if (fn) filtered = filtered.filter(p => p.name.toLowerCase().includes(fn));
-      filtered = filtered.filter(p => p.available && !p.suspended); // solo disponibles
+      filtered = filtered.filter(p => p.available && !p.suspended);
       const container = document.getElementById('playerList');
       if (!filtered.length) { container.innerHTML = '<div class="empty-state">No hay jugadores disponibles ahora</div>'; return; }
       container.innerHTML = filtered.map(p => {
         const isMe = p.id === me.id;
-        const dot = 'online';
-        return `<div class="player-item" style="cursor:pointer;" onclick="${isMe ? '' : `invitePlayer('${p.id}','${esc(p.name)}','${p.phone}')`}">
+        return `<div class="player-item">
           <div class="player-info">
-            <div class="player-row"><span class="status-dot ${dot}"></span><span class="p-name">${esc(p.name)}${isMe ? '<span class="my-tag">(vos)</span>' : ''}</span></div>
+            <div class="player-row"><span class="status-dot online"></span><span class="p-name">${esc(p.name)}${isMe ? '<span class="my-tag">(vos)</span>' : ''}</span></div>
             <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'Sin categoría'}</span>${!isMe ? `<span class="p-phone">${p.phone}</span>` : ''}</div>
           </div>
-          ${!isMe ? '<div class="p-actions"><span style="font-size:0.7rem;color:var(--green);font-weight:600;">Invitar</span></div>' : ''}
+          ${!isMe ? `<div class="p-actions"><button class="btn btn-sm btn-success" onclick="openInvite('${p.id}','${esc(p.name)}','${p.phone}')">Invitar</button></div>` : ''}
         </div>`;
       }).join('');
     }
 
-    async function invitePlayer(toId, toName, toPhone) {
+    function openInvite(toId, toName, toPhone) {
       if (!myPlayerId || !toPhone) return;
-      const fecha = prompt('¿Qué día? (ej: 28/07 o "mañana"):');
-      if (!fecha) return;
-      const hora = prompt('¿A qué hora? (ej: 18:00):');
-      if (!hora) return;
-      const cancha = prompt('¿En qué cancha? (ej: Padel Club Norte):');
-      if (!cancha) return;
+      inviteTarget = { id: toId, name: toName, phone: toPhone };
+      document.getElementById('inviteModalTitle').textContent = `Invitar a ${toName}`;
+      document.getElementById('inviteModalSub').textContent = `Completá los detalles del partido`;
+      document.getElementById('invDate').value = '';
+      document.getElementById('invTime').value = '';
+      document.getElementById('invCourt').value = '';
+      document.getElementById('inviteModalMsg').className = 'msg';
+      document.getElementById('inviteModalMsg').textContent = '';
+      document.getElementById('inviteModal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('invDate').focus(), 350);
+    }
+
+    document.getElementById('inviteCancelBtn').addEventListener('click', closeInvite);
+    document.getElementById('inviteModal').addEventListener('click', function(e) {
+      if (e.target === this) closeInvite();
+    });
+    function closeInvite() {
+      document.getElementById('inviteModal').classList.add('hidden');
+      inviteTarget = null;
+    }
+
+    document.getElementById('inviteSendBtn').addEventListener('click', async () => {
+      if (!inviteTarget) return;
+      const date = document.getElementById('invDate').value.trim();
+      const time = document.getElementById('invTime').value.trim();
+      const court = document.getElementById('invCourt').value.trim();
+      const msg = document.getElementById('inviteModalMsg');
+
+      if (!date) { msg.className = 'msg show error'; msg.textContent = 'Indicá la fecha'; return; }
+      if (!time) { msg.className = 'msg show error'; msg.textContent = 'Indicá el horario'; return; }
+      if (!court) { msg.className = 'msg show error'; msg.textContent = 'Indicá la cancha o lugar'; return; }
+
+      const btn = document.getElementById('inviteSendBtn');
+      btn.disabled = true; btn.textContent = 'Enviando...';
       try {
         const r = await fetch(`${API}/api/invitations`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fromPlayerId: myPlayerId, toPlayerId: toId })
+          body: JSON.stringify({ fromPlayerId: myPlayerId, toPlayerId: inviteTarget.id })
         });
         const d = await r.json();
-        if (!r.ok) { alert(d.error || 'Error al enviar invitación'); return; }
-        const msg = `Hola ${toName}! Te invito a jugar al pádel el ${fecha} a las ${hora} en ${cancha}. Confirmame!`;
-        window.open(`https://wa.me/${toPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+        if (!r.ok) { msg.className = 'msg show error'; msg.textContent = d.error || 'Error'; btn.disabled = false; btn.textContent = 'Enviar invitación'; return; }
+        const whatsapp = `Hola ${inviteTarget.name}! Te invito a jugar al pádel el ${date} a las ${time} en ${court}. Confirmame!`;
+        window.open(`https://wa.me/${inviteTarget.phone}?text=${encodeURIComponent(whatsapp)}`, '_blank');
+        document.getElementById('inviteModal').classList.add('hidden');
+        inviteTarget = null;
         loadApp();
-      } catch { alert('Error de conexión'); }
-    }
+      } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; }
+      btn.disabled = false; btn.textContent = 'Enviar invitación';
+    });
 
     function renderInvitations(invs) {
       const container = document.getElementById('invitationsList');
