@@ -3,11 +3,14 @@ const cors = require('cors');
 const path = require('path');
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const db = require('./database');
 const Player = require('./models/Player');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.set('trust proxy', 1);
 const MONGODB_URI = process.env.MONGODB_URI;
 
 // Soporte para variables individuales
@@ -30,8 +33,63 @@ const MONGODB_OPTIONS = {
   socketTimeoutMS: 45000
 };
 
-app.use(cors());
-app.use(express.json());
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'https://padel-match-p50g.onrender.com';
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https://ipfs.io", "https://*.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      connectSrc: ["'self'"],
+      frameSrc: ["https://wa.me"],
+    }
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+app.use(helmet.hidePoweredBy());
+app.use(helmet.referrerPolicy({ policy: 'no-referrer' }));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes, intentá de nuevo más tarde' },
+});
+app.use(limiter);
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes, intentá de nuevo más tarde' },
+});
+app.use('/api/admin', apiLimiter);
+app.use('/api/invitations', apiLimiter);
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+    try {
+      const url = new URL(origin);
+      const hostname = url.hostname;
+      if (hostname === 'padel-match-p50g.onrender.com' || hostname === new URL(FRONTEND_ORIGIN).hostname) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    } catch {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: false,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+}));
+app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Health check
@@ -299,8 +357,13 @@ app.post('/api/rules/seed', async (req, res) => {
     await db.ensureRules();
     res.json({ ok: true, message: 'Reglas actualizadas' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Error interno' });
   }
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'No encontrado' });
 });
 
 // ─── ADMIN ──────────────────────────────────────────────
