@@ -667,18 +667,17 @@
       let filtered = players;
       if (fc !== 'all') filtered = filtered.filter(p => p.category === fc);
       if (fn) filtered = filtered.filter(p => p.name.toLowerCase().includes(fn));
-      filtered = filtered.filter(p => p.available && !p.suspended);
+      filtered = filtered.filter(p => p.available && !p.suspended && p.id !== me.id);
       const container = document.getElementById('playerList');
       document.getElementById('availableCount').textContent = filtered.length > 0 ? `${filtered.length} disponibles` : '';
       if (!filtered.length) { container.innerHTML = '<div class="empty-state">No hay jugadores disponibles ahora</div>'; updateMultiBar(); return; }
       container.innerHTML = filtered.map(p => {
-        const isMe = p.id === me.id;
         const checked = selectedPlayers.has(p.id) ? 'checked' : '';
-        return `<div class="player-item" style="${isMe ? '' : 'cursor:pointer;'}" onclick="${isMe ? '' : `toggleSelect('${p.id}')`}">
-          ${!isMe ? `<div style="display:flex;align-items:center;padding-right:8px;"><input type="checkbox" class="player-check" data-id="${p.id}" ${checked} onclick="event.stopPropagation();toggleSelect('${p.id}')" style="width:18px;height:18px;accent-color:var(--green);" /></div>` : ''}
+        return `<div class="player-item" style="cursor:pointer;" onclick="toggleSelect('${p.id}')">
+          <div style="display:flex;align-items:center;padding-right:8px;"><input type="checkbox" class="player-check" data-id="${p.id}" ${checked} onclick="event.stopPropagation();toggleSelect('${p.id}')" style="width:18px;height:18px;accent-color:var(--green);" /></div>
           <div class="player-info">
-            <div class="player-row"><span class="status-dot online"></span><span class="p-name">${esc(p.name)}${isMe ? '<span class="my-tag">(vos)</span>' : ''}</span></div>
-            <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'Sin categoría'}</span>${!isMe ? `<span class="p-phone">${p.phone}</span>` : ''}</div>
+            <div class="player-row"><span class="status-dot online"></span><span class="p-name">${esc(p.name)}</span></div>
+            <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'Sin categoría'}</span><span class="p-phone">${esc(p.phone)}</span></div>
           </div>
         </div>`;
       }).join('');
