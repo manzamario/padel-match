@@ -327,6 +327,7 @@
         <div class="container top-bar-inner" style="padding:0;">
           <img src="Logo.png" alt="Padel Match" style="height:36px;width:auto;border-radius:8px;" />
           <div class="top-actions">
+            <button type="button" id="installBtn" class="btn btn-ghost btn-sm" style="display:none;" onclick="installPWA()">Instalar App</button>
             <div id="invBadge" class="badge hidden">0</div>
             <div id="statusToggle" class="pill-toggle on">
               <span class="pill-dot on" id="statusDot"></span>
@@ -512,6 +513,23 @@
         if (r) { showApp(); return; }
       }
       showRegisterScreen();
+
+      // PWA Install logic
+      let deferredPrompt;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById('installBtn').style.display = 'inline-flex';
+      });
+      window.installPWA = async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          document.getElementById('installBtn').style.display = 'none';
+        }
+        deferredPrompt = null;
+      };
     }
 
     function showRegisterScreen() {
