@@ -289,13 +289,13 @@
               <option value="1">1 - Profesional</option>
             </select>
           </div>
-          <button class="btn btn-primary" id="regBtn" onclick="doRegister()">Crear cuenta</button>
+          <button class="btn btn-primary" id="regBtn">Crear cuenta</button>
           <div id="regMessage" class="msg"></div>
           <div style="text-align:center;margin-top:16px;">
-            <button class="btn btn-ghost btn-sm" style="width:auto;" onclick="showLogin()">Ya tengo cuenta &rarr;</button>
+            <button class="btn btn-ghost btn-sm" style="width:auto;" id="showLoginBtn">Ya tengo cuenta &rarr;</button>
           </div>
           <div style="text-align:center;margin-top:8px;">
-            <button class="btn btn-ghost btn-sm" style="width:auto;font-size:0.7rem;color:var(--muted);" onclick="showAdminLogin()">Administración</button>
+            <button class="btn btn-ghost btn-sm" style="width:auto;font-size:0.7rem;color:var(--muted);" id="showAdminLoginBtn">Administración</button>
           </div>
         </div>
 
@@ -307,15 +307,15 @@
             <input type="tel" id="loginPhone" autocomplete="tel" inputmode="numeric" placeholder="+543725430303" />
             <div class="input-hint">Ej: +543725430303 o 3725430303</div>
           </div>
-          <button class="btn btn-primary" id="loginBtn" onclick="doLoginSearch()">Buscar</button>
+          <button class="btn btn-primary" id="loginBtn">Buscar</button>
           <div id="loginMessage" class="msg"></div>
           <div id="loginResult" class="hidden" style="margin-top:16px;padding:16px;background:rgba(37,211,102,0.06);border:1px solid rgba(37,211,102,0.15);border-radius:12px;">
             <div style="font-size:0.85rem;margin-bottom:10px;color:var(--muted);">¿Sos vos?</div>
             <div id="loginPlayerDetails"></div>
-            <button class="btn btn-primary" style="margin-top:10px;" id="confirmLoginBtn" onclick="doLoginConfirm()">Soy yo, ingresar</button>
+            <button class="btn btn-primary" style="margin-top:10px;" id="confirmLoginBtn">Soy yo, ingresar</button>
           </div>
           <div style="text-align:center;margin-top:16px;">
-            <button class="btn btn-ghost btn-sm" style="width:auto;" onclick="showRegisterScreen()">&larr; Crear cuenta nueva</button>
+            <button class="btn btn-ghost btn-sm" style="width:auto;" id="backToRegisterBtn">&larr; Crear cuenta nueva</button>
           </div>
         </div>
       </div>
@@ -327,7 +327,7 @@
         <div class="container top-bar-inner" style="padding:0;">
           <img src="Logo.png" alt="Padel Match" style="height:36px;width:auto;border-radius:8px;" />
           <div class="top-actions">
-            <button type="button" id="installBtn" class="btn btn-ghost btn-sm" style="display:none;" onclick="installPWA()">Instalar App</button>
+            <button type="button" id="installBtn" class="btn btn-ghost btn-sm" style="display:none;">Instalar App</button>
             <div id="invBadge" class="badge hidden">0</div>
             <div id="statusToggle" class="pill-toggle on">
               <span class="pill-dot on" id="statusDot"></span>
@@ -401,11 +401,11 @@
                 <label>Contraseña</label>
                 <input type="password" id="adminPassword" autocomplete="off" placeholder="Contraseña maestra" required />
               </div>
-              <button type="button" class="btn btn-primary" id="adminLoginBtn" onclick="doAdminLogin()">Ingresar</button>
+              <button type="button" class="btn btn-primary" id="adminLoginBtn">Ingresar</button>
               <div id="adminLoginMsg" class="msg"></div>
             </form>
             <div style="text-align:center;margin-top:14px;">
-              <button class="btn btn-ghost btn-sm" style="width:auto;" onclick="backFromAdminLogin()">Volver</button>
+              <button class="btn btn-ghost btn-sm" style="width:auto;" id="backFromAdminLoginBtn">Volver</button>
             </div>
           </div>
         </div>
@@ -418,7 +418,7 @@
         <div class="container top-bar-inner" style="padding:0;">
           <h1>Panel <span>Admin</span></h1>
           <div class="top-actions">
-            <button id="adminLogoutBtn" class="btn btn-sm btn-ghost" onclick="doAdminLogout()">Salir</button>
+            <button id="adminLogoutBtn" class="btn btn-sm btn-ghost">Salir</button>
           </div>
         </div>
       </div>
@@ -438,7 +438,7 @@
               <option value="">Categoría</option>
               <option value="8">8 Principiante</option><option value="7">7 Baja</option><option value="6">6 Media-Baja</option><option value="5">5 Media</option><option value="4">4 Media-Alta</option><option value="3">3 Alta</option><option value="2">2 Muy Alta</option><option value="1">1 Pro</option>
             </select>
-            <button class="btn btn-sm btn-primary" onclick="adminAddPlayer()">Agregar</button>
+            <button class="btn btn-sm btn-primary" id="adminAddPlayerBtn">Agregar</button>
           </div>
           <div id="adminAddMsg" class="msg" style="margin-top:8px;"></div>
         </div>
@@ -530,6 +530,19 @@
         }
         deferredPrompt = null;
       };
+
+      // Event listeners for buttons (avoid Brave blocking inline onclick)
+      document.getElementById('regBtn').addEventListener('click', doRegister);
+      document.getElementById('showLoginBtn').addEventListener('click', showLogin);
+      document.getElementById('showAdminLoginBtn').addEventListener('click', showAdminLogin);
+      document.getElementById('loginBtn').addEventListener('click', doLoginSearch);
+      document.getElementById('confirmLoginBtn').addEventListener('click', doLoginConfirm);
+      document.getElementById('backToRegisterBtn').addEventListener('click', showRegisterScreen);
+      document.getElementById('installBtn').addEventListener('click', installPWA);
+      document.getElementById('adminLoginBtn').addEventListener('click', doAdminLogin);
+      document.getElementById('backFromAdminLoginBtn').addEventListener('click', backFromAdminLogin);
+      document.getElementById('adminLogoutBtn').addEventListener('click', doAdminLogout);
+      document.getElementById('adminAddPlayerBtn').addEventListener('click', adminAddPlayer);
     }
 
     function showRegisterScreen() {
