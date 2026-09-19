@@ -444,12 +444,14 @@
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
           <input type="text" id="adminSearchPlayer" placeholder="Buscar jugador..." style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:0.8rem;font-family:inherit;background:var(--card);color:var(--text);" />
-          <select id="adminFilterStatus" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:0.8rem;font-family:inherit;background:var(--card);color:var(--text);">
-            <option value="all">Todos</option>
-            <option value="active">Activos</option>
-            <option value="suspended">Suspendidos</option>
-          </select>
-        </div>
+<select id="adminFilterStatus" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:0.8rem;font-family:inherit;background:var(--card);color:var(--text);">
+<option value="all">Todos</option>
+<option value="active">Activos</option>
+<option value="suspended">Suspendidos</option>
+<option value="online">En línea</option>
+</select>
+<button class="btn btn-sm btn-danger" id="setAllOfflineBtn">Poner todos en rojo</button>
+</div>
         <div id="adminPlayerList" class="player-list"></div>
       </div>
 
@@ -543,6 +545,20 @@
       document.getElementById('backFromAdminLoginBtn').addEventListener('click', backFromAdminLogin);
       document.getElementById('adminLogoutBtn').addEventListener('click', doAdminLogout);
       document.getElementById('adminAddPlayerBtn').addEventListener('click', adminAddPlayer);
+      document.getElementById('setAllOfflineBtn').addEventListener('click', async () => {
+        if (!confirm('¿Poner a todos los jugadores en rojo (no disponibles)?')) return;
+        try {
+          const players = await (await fetch(`${API}/api/admin/players`, { headers: { 'Authorization': `Bearer ${adminToken}` } })).json();
+          const unavailable = players.filter(p => !p.suspended);
+          for (const p of unavailable) {
+            await fetch(`${API}/api/players/${p.id}/availability`, {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ available: false })
+            });
+          }
+          loadAdminPlayers();
+        } catch {}
+      });
     }
 
     function showRegisterScreen() {
@@ -1152,17 +1168,30 @@ Padel Match - buscá tu dupla ideal`;
                 ${p.suspended ? `<span style="color:var(--red);">Hasta: ${since}</span>` : ''}
               </div>
             </div>
-            <div class="p-actions" style="flex-wrap:wrap;">
-              ${p.suspended
-                ? `<button class="btn btn-sm btn-ghost" onclick="adminUnsuspend('${p.id}')">Restaurar</button>`
-                : `<button class="btn btn-sm btn-ghost" onclick="adminSuspend('${p.id}')">Suspender</button>`
-              }
-              <button class="btn btn-sm btn-ghost" onclick="adminWarn('${p.id}')">Advertir</button>
-              <button class="btn btn-sm btn-danger" onclick="adminDelete('${p.id}','${esc(p.name)}')">Eliminar</button>
-            </div>
+<div class="p-actions" style="flex-wrap:wrap;">
+${p.suspended
+? `<button class="btn btn-sm btn-ghost" onclick="adminUnsuspend('${p.id}')">Restaurar</button>`
+:`<button class="btn btn-sm btn-ghost" onclick="adminSuspend('${p.id}')">Suspender</button>`
+}
+<button class="btn btn-sm btn-ghost" onclick="adminWarn('${p.id}')">Advertir</button>
+<button class="btn btn-sm ${p.available ? 'btn-danger' : 'btn-primary'}" onclick="adminToggleAvailability('${p.id}')">${p.available ? '🔴 No disp' : '🟢 Disp'}</button>
+<button class="btn btn-sm btn-danger" onclick="adminDelete('${p.id}','${esc(p.name)}')">Eliminar</button>
+</div>
           </div>`;
         }).join('');
       } catch {}
+    }
+
+    async function adminToggleAvailability(id) {
+      const r = await fetch(`${API}/api/players/${id}/availability`);
+      if (!r.ok) return;
+      const p = await r.json();
+      const newAvailable = !p.available;
+      const u = await fetch(`${API}/api/players/${id}/availability`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ available: newAvailable })
+      });
+      if (u.ok) loadAdminPlayers(); else alert('Error');
     }
 
     async function adminSuspend(id) {
