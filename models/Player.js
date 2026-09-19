@@ -1,10 +1,12 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const playerSchema = new mongoose.Schema({
   _id: { type: String },
   name: { type: String, default: '' },
   phone: { type: String, required: true, unique: true },
   category: { type: String, required: true },
+  password: { type: String, required: true },
   available: { type: Boolean, default: false },
   isComplete: { type: Boolean, default: false },
   rejections: { type: Number, default: 0 },
@@ -17,6 +19,19 @@ const playerSchema = new mongoose.Schema({
   toObject: { virtuals: true },
   toJSON: { virtuals: true }
 });
+
+playerSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (err) { next(err); }
+});
+
+playerSchema.methods.comparePassword = async function(candidate) {
+  return bcrypt.compare(candidate, this.password);
+};
 
 playerSchema.virtual('id').get(function() { return this._id; });
 

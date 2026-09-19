@@ -289,6 +289,10 @@
               <option value="1">1 - Profesional</option>
             </select>
           </div>
+          <div class="input-group">
+            <label>Contraseña <span class="req">*</span></label>
+            <input type="password" id="regPassword" autocomplete="new-password" placeholder="Mínimo 4 caracteres" />
+          </div>
           <button class="btn btn-primary" id="regBtn">Crear cuenta</button>
           <div id="regMessage" class="msg"></div>
           <div style="text-align:center;margin-top:16px;">
@@ -307,13 +311,12 @@
             <input type="tel" id="loginPhone" autocomplete="tel" inputmode="numeric" placeholder="+543725430303" />
             <div class="input-hint">Ej: +543725430303 o 3725430303</div>
           </div>
-          <button class="btn btn-primary" id="loginBtn">Buscar</button>
-          <div id="loginMessage" class="msg"></div>
-          <div id="loginResult" class="hidden" style="margin-top:16px;padding:16px;background:rgba(37,211,102,0.06);border:1px solid rgba(37,211,102,0.15);border-radius:12px;">
-            <div style="font-size:0.85rem;margin-bottom:10px;color:var(--muted);">¿Sos vos?</div>
-            <div id="loginPlayerDetails"></div>
-            <button class="btn btn-primary" style="margin-top:10px;" id="confirmLoginBtn">Soy yo, ingresar</button>
+          <div class="input-group">
+            <label>Contraseña <span class="req">*</span></label>
+            <input type="password" id="loginPassword" autocomplete="current-password" placeholder="Tu contraseña" />
           </div>
+          <button class="btn btn-primary" id="loginBtn">Ingresar</button>
+          <div id="loginMessage" class="msg"></div>
           <div style="text-align:center;margin-top:16px;">
             <button class="btn btn-ghost btn-sm" style="width:auto;" id="backToRegisterBtn">&larr; Crear cuenta nueva</button>
           </div>
@@ -538,7 +541,6 @@
       document.getElementById('showLoginBtn').addEventListener('click', showLogin);
       document.getElementById('showAdminLoginBtn').addEventListener('click', showAdminLogin);
       document.getElementById('loginBtn').addEventListener('click', doLoginSearch);
-      document.getElementById('confirmLoginBtn').addEventListener('click', doLoginConfirm);
       document.getElementById('backToRegisterBtn').addEventListener('click', showRegisterScreen);
       document.getElementById('installBtn').addEventListener('click', installPWA);
       document.getElementById('adminLoginBtn').addEventListener('click', doAdminLogin);
@@ -597,11 +599,13 @@
       const name = document.getElementById('regName');
       const phone = document.getElementById('regPhone');
       const category = document.getElementById('regCategory');
+      const password = document.getElementById('regPassword');
       const msg = document.getElementById('regMessage');
       const btn = document.getElementById('regBtn');
 
       if (!name.value.trim()) { msg.className = 'msg show error'; msg.textContent = 'Escribí tu nombre'; return; }
       if (!category.value) { msg.className = 'msg show error'; msg.textContent = 'Seleccioná una categoría'; return; }
+      if (!password.value || password.value.length < 4) { msg.className = 'msg show error'; msg.textContent = 'La contraseña debe tener al menos 4 caracteres'; return; }
       let clean = phone.value.trim().replace(/\s/g, '');
       if (!/^\+?\d{7,15}$/.test(clean)) { msg.className = 'msg show error'; msg.textContent = 'Teléfono inválido (ej: +543725430303)'; return; }
       clean = normalizePhone(clean);
@@ -610,7 +614,7 @@
       try {
         const r = await fetch(`${API}/api/players`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name.value.trim(), phone: clean, category: category.value })
+          body: JSON.stringify({ name: name.value.trim(), phone: clean, category: category.value, password: password.value })
         });
         const data = await r.json();
         if (!r.ok) {
@@ -634,44 +638,35 @@
 
     async function doLoginSearch() {
       const phone = document.getElementById('loginPhone');
+      const pw = document.getElementById('loginPassword');
       const msgEl = document.getElementById('loginMessage');
       const btn = document.getElementById('loginBtn');
-      const info = document.getElementById('loginResult');
       let clean = phone.value.trim().replace(/\s/g, '');
       msgEl.className = 'msg'; msgEl.textContent = '';
-      info.classList.add('hidden');
-      foundPlayerId = null;
 
       if (!/^\+?\d{7,15}$/.test(clean)) { msgEl.className = 'msg show error'; msgEl.textContent = 'Teléfono inválido (ej: +543725430303)'; return; }
+      if (!pw.value) { msgEl.className = 'msg show error'; msgEl.textContent = 'Ingresá tu contraseña'; return; }
       clean = normalizePhone(clean);
-      btn.disabled = true; btn.textContent = 'Buscando...';
+      btn.disabled = true; btn.textContent = 'Ingresando...';
       try {
-        const r = await fetch(`${API}/api/players/by-phone/${clean}`);
-        if (r.status === 404) {
-          msgEl.className = 'msg show error'; msgEl.textContent = 'No hay cuenta con ese teléfono. Creá una cuenta nueva.';
-          btn.disabled = false; btn.textContent = 'Buscar'; return;
-        }
-        if (!r.ok) { msgEl.className = 'msg show error'; msgEl.textContent = 'Error del servidor'; btn.disabled = false; btn.textContent = 'Buscar'; return; }
+        const r = await fetch(`${API}/api/login`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: clean, password: pw.value })
+        });
         const data = await r.json();
-        foundPlayerId = data.id;
-        const cats = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
-        document.getElementById('loginPlayerDetails').innerHTML =
-          `<div style="display:flex;flex-direction:column;gap:8px;">
-            <div style="display:flex;justify-content:space-between;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.06);"><span style="color:var(--muted);font-size:0.75rem;">Nombre</span><span style="font-weight:600;">${esc(data.name)}</span></div>
-            <div style="display:flex;justify-content:space-between;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.06);"><span style="color:var(--muted);font-size:0.75rem;">Categoría</span><span>${cats[data.category]||'N/A'}</span></div>
-            <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);font-size:0.75rem;">Teléfono</span><span>${data.phone}</span></div>
-          </div>`;
-        info.classList.remove('hidden');
+        if (!r.ok) {
+          msgEl.className = 'msg show error'; msgEl.textContent = data.error || 'Error';
+          btn.disabled = false; btn.textContent = 'Ingresar'; return;
+        }
+        myPlayerId = data.id;
+        localStorage.setItem('padel_myId', myPlayerId);
+        showApp();
       } catch { msgEl.className = 'msg show error'; msgEl.textContent = 'Error de conexión'; }
-      btn.disabled = false; btn.textContent = 'Buscar';
+      btn.disabled = false; btn.textContent = 'Ingresar';
     }
 
     function doLoginConfirm() {
-      if (foundPlayerId) {
-        myPlayerId = foundPlayerId;
-        localStorage.setItem('padel_myId', myPlayerId);
-        showApp();
-      }
+      // Removed — no longer needed
     }
 
     document.getElementById('logoutBtn').addEventListener('click', () => {

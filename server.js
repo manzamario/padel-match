@@ -112,16 +112,16 @@ app.use((req, res, next) => {
 
 app.post('/api/players', async (req, res) => {
   try {
-    const { name, phone, category } = req.body;
-    if (!name || !phone || !category) {
-      return res.status(400).json({ error: 'Nombre, teléfono y categoría son obligatorios' });
+    const { name, phone, category, password } = req.body;
+    if (!name || !phone || !category || !password) {
+      return res.status(400).json({ error: 'Nombre, teléfono, categoría y contraseña son obligatorios' });
     }
     const existing = await db.findPlayerByPhone(phone);
     if (existing) {
       return res.status(409).json({ error: 'Ya existe un jugador con ese teléfono', player: existing });
     }
     const id = uuidv4();
-    const player = await db.createPlayer(id, name.trim(), phone.trim(), category);
+    const player = await db.createPlayer(id, name.trim(), phone.trim(), category, password);
     res.status(201).json(player);
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
@@ -267,13 +267,14 @@ app.get('/api/invitations/:id/respond', async (req, res) => {
           <div class="icon">🎾</div>
           <h2>¡Tenés una invitación!</h2>
           <p>${inv.fromName} te invitó a jugar al pádel. Para aceptar, completá tus datos.</p>
-          <form id="regForm" onsubmit="event.preventDefault();submitReg()">
-            <div class="input-group"><label>Nombre completo</label><input type="text" id="regName" required placeholder="Tu nombre" /></div>
-            <input type="hidden" id="invId" value="${req.params.id}" />
-            <button type="submit" class="btn btn-green">Aceptar e ingreso</button>
-          </form>
+<form id="regForm" onsubmit="event.preventDefault();submitReg()">
+              <div class="input-group"><label>Nombre completo</label><input type="text" id="regName" required placeholder="Tu nombre" /></div>
+              <div class="input-group" style="margin-top:12px;"><label>Contraseña</label><input type="password" id="regPassword" required placeholder="Mínimo 4 caracteres" /></div>
+              <input type="hidden" id="invId" value="${req.params.id}" />
+              <button type="submit" class="btn btn-green">Aceptar e ingreso</button>
+            </form>
         </div>
-        <script>async function submitReg(){const n=document.getElementById('regName').value.trim();if(!n)return;const r=await fetch('/api/invitations/${req.params.id}/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});if(r.ok){const d=await r.json();localStorage.setItem('padel_myId',d.playerId);location.href='/';}else{alert('Error al registrarse')}}</script>
+        <script>async function submitReg(){const n=document.getElementById('regName').value.trim();const pw=document.getElementById('regPassword').value;if(!n)return;if(!pw||pw.length<4)return alert('La contraseña debe tener al menos 4 caracteres');const r=await fetch('/api/invitations/${req.params.id}/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,password:pw})});if(r.ok){const d=await r.json();localStorage.setItem('padel_myId',d.playerId);location.href='/';}else{const err=await r.json();alert(err.error||'Error al registrarse')}}</script>
       </body></html>`);
       return;
     }
@@ -318,9 +319,10 @@ app.post('/api/invitations/:id/register', async (req, res) => {
   try {
     const inv = await db.getInvitation(req.params.id);
     if (!inv || inv.status !== 'pending') return res.status(400).json({ error: 'Invitación no válida' });
-    const { name } = req.body;
+    const { name, password } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Nombre requerido' });
-    const player = await db.completeRegistration(inv.toPlayer, name.trim());
+    if (!password) return res.status(400).json({ error: 'Contraseña requerida' });
+    const player = await db.completeRegistration(inv.toPlayer, name.trim(), password);
     if (!player) return res.status(500).json({ error: 'Error al crear perfil' });
     await db.respondInvitation(req.params.id, 'accepted');
     res.json({ success: true, playerId: player.id });
@@ -365,9 +367,26 @@ app.post('/api/rules/seed', async (req, res) => {
 // ─── ADMIN ──────────────────────────────────────────────
 
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'M@nza$23&08';
-// ⚠ Para seguridad: crear variable ADMIN_PASSWORD en Render Dashboard
 const adminTokens = new Set();
+const SALT_ROUNDS = 10;
+
+app.post('/api/login', async (req, res) => {
+  try {
+    const { phone, password } = req.body;
+    if (!phone || !password) return res.status(400).json({ error: 'Teléfono y contraseña son obligatorios' });
+    const clean = phone.replace(/\s/g, '');
+    const player = await Player.findOne({ phone: clean });
+    if (!player) return res.status(401).json({ error: 'No existe cuenta con ese teléfono' });
+    if (!player.isComplete) return res.status(403).json({ error: 'Cuenta incompleta' });
+    const match = await bcrypt.compare(password, player.password);
+    if (!match) return res.status(401).json({ error: 'Contraseña incorrecta' });
+    res.json({ id: player._id.toString(), name: player.name, phone: player.phone, category: player.category, available: player.available });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
 
 app.post('/api/admin/login', (req, res) => {
   const { password } = req.body;

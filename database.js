@@ -24,14 +24,9 @@ async function ensureRules() {
 }
 
 // --- PLAYERS ---
-async function createPlayer(id, name, phone, category) {
-  const p = await Player.create({ _id: id, name, phone, category, isComplete: true });
+async function createPlayer(id, name, phone, category, password) {
+  const p = await Player.create({ _id: id, name, phone, category, password, isComplete: true });
   return p.toObject();
-}
-
-async function getPlayer(id) {
-  const p = await Player.findById(id);
-  return p ? p.toObject() : null;
 }
 
 async function findPlayerByPhone(phone) {
@@ -39,16 +34,24 @@ async function findPlayerByPhone(phone) {
   return p ? p.toObject() : null;
 }
 
+async function verifyPlayerPassword(phone, password) {
+  const p = await Player.findOne({ phone });
+  if (!p) return null;
+  const match = await p.comparePassword(password);
+  if (!match) return null;
+  return p.toObject();
+}
+
 async function findOrCreatePendingPlayer(phone, category) {
   let p = await Player.findOne({ phone });
   if (p) return p.toObject();
   const id = crypto.randomUUID ? crypto.randomUUID() : 'pl_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-  p = await Player.create({ _id: id, name: '', phone, category, isComplete: false });
+  p = await Player.create({ _id: id, name: '', phone, category, password: '', isComplete: false });
   return p.toObject();
 }
 
-async function completeRegistration(id, name) {
-  const p = await Player.findByIdAndUpdate(id, { name: name.trim(), isComplete: true }, { new: true });
+async function completeRegistration(id, name, password) {
+  const p = await Player.findByIdAndUpdate(id, { name: name.trim(), isComplete: true, password: password }, { new: true });
   return p ? p.toObject() : null;
 }
 
@@ -232,6 +235,8 @@ async function getAdminStats() {
 
 module.exports = {
   ensureRules,
+  verifyPlayerPassword,
+  verifyPlayerPassword,
   createPlayer, findOrCreatePendingPlayer, completeRegistration, getPlayer, getAllPlayers, findPlayerByPhone,
   toggleAvailability, addRejection, checkAndUnsuspend, deletePlayer, resetPlayer,
   createInvitation, getInvitation, getInvitationWithFrom, getPendingInvitationsForPlayer, getSentInvitations,
