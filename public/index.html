@@ -867,14 +867,14 @@
         <div style="position:absolute;z-index:100;background:var(--bg);border:1px solid var(--border);padding:12px;border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
           <div style="margin-bottom:8px;font-weight:600;font-size:0.85rem;">Seleccionar fecha</div>
           <div style="max-height:200px;overflow-y:auto;">
-            ${options.map(opt => `
-              <div style="padding:8px;cursor:pointer;border-radius:4px;" 
-                onmouseover="this.style.background='#333'" 
-                onmouseout="this.style.background='transparent'"
-                onclick="document.getElementById('invDate').value='${opt.value}'; this.parentElement.parentElement.remove(); document.getElementById('invDateField').classList.remove('error'); document.getElementById('invDateError').style.display='none';">
-                ${opt.text}
-              </div>
-            ").join('')}
+${options.map(opt => `
+                <div style="padding:8px;cursor:pointer;border-radius:4px;" 
+                  onmouseover="this.style.background='#333'" 
+                  onmouseout="this.style.background='transparent'"
+                  onclick="document.getElementById('invDate').value='${opt.value}'; this.parentElement.parentElement.remove(); document.getElementById('invDateField').classList.remove('error'); document.getElementById('invDateError').style.display='none';">
+                  ${opt.text}
+                </div>
+              `).join('')}
           </div>
         </div>
       `;
