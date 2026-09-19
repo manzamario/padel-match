@@ -1069,13 +1069,17 @@ Padel Match - buscá tu dupla ideal`;
       const pass = document.getElementById('adminPassword');
       const btn = document.getElementById('adminLoginBtn');
       const msg = document.getElementById('adminLoginMsg');
+      console.log('Password being sent:', JSON.stringify(pass.value));
       btn.disabled = true; btn.textContent = 'Ingresando...';
       try {
+        const body = JSON.stringify({ password: pass.value });
+        console.log('Body:', body);
         const r = await fetch(`${API}/api/admin/login`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: pass.value })
+          body: body
         });
         const d = await r.json();
+        console.log('Response:', d);
         if (!r.ok) { msg.className = 'msg show error'; msg.textContent = d.error; btn.disabled = false; btn.textContent = 'Ingresar'; return; }
         adminToken = d.token;
         localStorage.setItem('padel_adminToken', adminToken);
