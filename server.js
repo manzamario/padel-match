@@ -362,11 +362,6 @@ app.post('/api/rules/seed', async (req, res) => {
   }
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'No encontrado' });
-});
-
 // ─── ADMIN ──────────────────────────────────────────────
 
 const crypto = require('crypto');
@@ -516,6 +511,11 @@ async function connectMongo(retries = 5) {
   console.error('No se pudo conectar a MongoDB');
   return false;
 }
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'No encontrado' });
+});
 
 async function start() {
   app.listen(PORT, () => {
