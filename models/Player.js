@@ -5,7 +5,7 @@ const playerSchema = new mongoose.Schema({
   name: { type: String, default: '' },
   phone: { type: String, required: true, unique: true },
   category: { type: String, required: true },
-  available: { type: Boolean, default: true },
+  available: { type: Boolean, default: false },
   isComplete: { type: Boolean, default: false },
   rejections: { type: Number, default: 0 },
   suspended: { type: Boolean, default: false },
