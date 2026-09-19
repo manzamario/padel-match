@@ -863,7 +863,7 @@
       window._inviteTargets = null;
     }
 
-    // NUEVO: Calendar button functionality
+    // Calendar button functionality - rewrite with addEventListener
     document.getElementById('invDateBtn').addEventListener('click', () => {
       const today = new Date();
       const todayStr = today.toLocaleDateString('es-ES');
@@ -871,43 +871,85 @@
       const tomorrowStr = tomorrow.toLocaleDateString('es-ES');
       const nextWeek = new Date(); nextWeek.setDate(today.getDate() + 7);
       const nextWeekStr = nextWeek.toLocaleDateString('es-ES');
-      
+
       const options = [
         { value: todayStr, text: `Hoy - ${todayStr}` },
         { value: tomorrowStr, text: `Mañana - ${tomorrowStr}` },
         { value: nextWeekStr, text: `Próxima semana - ${nextWeekStr}` }
       ];
-      
+
       const input = document.getElementById('invDate');
-      const html = `
-        <div style="position:absolute;z-index:100;background:var(--bg);border:1px solid var(--border);padding:12px;border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
-          <div style="margin-bottom:8px;font-weight:600;font-size:0.85rem;">Seleccionar fecha</div>
-          <div style="max-height:200px;overflow-y:auto;">
-${options.map(opt => `
-                <div style="padding:8px;cursor:pointer;border-radius:4px;" 
-                  onmouseover="this.style.background='#333'" 
-                  onmouseout="this.style.background='transparent'"
-                  onclick="document.getElementById('invDate').value='${opt.value}'; this.parentElement.parentElement.remove(); document.getElementById('invDateField').classList.remove('error'); document.getElementById('invDateError').style.display='none';">
-                  ${opt.text}
-                </div>
-              `).join('')}
-          </div>
-        </div>
+      const existing = document.getElementById('calendarDropdown');
+      if (existing) existing.remove();
+
+      const dropdown = document.createElement('div');
+      dropdown.id = 'calendarDropdown';
+      dropdown.style.cssText = 'position:absolute;z-index:100;background:var(--bg);border:1px solid var(--border);padding:12px;border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,0.2);';
+      dropdown.innerHTML = `
+        <div style="margin-bottom:8px;font-weight:600;font-size:0.85rem;">Seleccionar fecha</div>
+        <div style="max-height:200px;overflow-y:auto;" id="calendarOptions"></div>
       `;
-      
-      const container = document.createElement('div');
-      container.innerHTML = html;
-      input.parentElement.appendChild(container);
-      
+
+      const optsContainer = dropdown.querySelector('#calendarOptions');
+      options.forEach(opt => {
+        const div = document.createElement('div');
+        div.style.cssText = 'padding:8px;cursor:pointer;border-radius:4px;';
+        div.textContent = opt.text;
+        div.addEventListener('mouseover', () => div.style.background = '#333');
+        div.addEventListener('mouseout', () => div.style.background = 'transparent');
+        div.addEventListener('click', (e) => {
+          e.stopPropagation();
+          input.value = opt.value;
+          input.dispatchEvent(new Event('input'));
+          dropdown.remove();
+        });
+        optsContainer.appendChild(div);
+      });
+
+      input.parentElement.appendChild(dropdown);
+
       const closeCalendar = (e) => {
-        if (!container.contains(e.target) && e.target !== input && e.target !== document.getElementById('invDateBtn')) {
-          document.body.removeChild(container);
+        if (!dropdown.contains(e.target) && e.target !== input && e.target !== document.getElementById('invDateBtn')) {
+          dropdown.remove();
           document.removeEventListener('click', closeCalendar);
         }
       };
       setTimeout(() => document.addEventListener('click', closeCalendar), 0);
     });
 
+    // Time field with auto :00 and validation - fixed
+    const invTime = document.getElementById('invTime');
+    invTime.addEventListener('input', () => {
+      let val = invTime.value.trim();
+      if (val) {
+        const parts = val.split(':');
+        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+          const hours = parseInt(parts[0]), minutes = parseInt(parts[1]);
+          if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+            invTime.value = hours + ':' + (minutes < 10 ? '0' + minutes : minutes);
+          }
+        } else if (!isNaN(val) && parseInt(val) <= 23) {
+          invTime.value = val + ':00';
+        }
+      }
+      if (!invTime.value) {
+        document.getElementById('invTimeField').classList.add('error');
+        document.getElementById('invTimeError').style.display = 'block';
+      } else {
+        document.getElementById('invTimeField').classList.remove('error');
+        document.getElementById('invTimeError').style.display = 'none';
+      }
+    });
+
+    function closeInvite() {
+      const existing = document.getElementById('calendarDropdown');
+      if (existing) existing.remove();
+      document.getElementById('inviteModal').classList.add('hidden');
+      document.getElementById('inviteTargetList').textContent = '';
+      window._inviteTargets = null;
+    }
+
+    // Invite send button
     document.getElementById('inviteSendBtn').addEventListener('click', async () => {
       const targets = window._inviteTargets;
       if (!targets || targets.length === 0) return;
