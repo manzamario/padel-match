@@ -9,7 +9,7 @@ const db = require('./database');
 const Player = require('./models/Player');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 app.set('trust proxy', 1);
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -553,7 +553,7 @@ app.use((req, res) => {
 });
 
 async function start() {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor HTTP corriendo en puerto ${PORT}`);
   });
   connectMongo();
