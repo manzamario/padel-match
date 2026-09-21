@@ -956,12 +956,34 @@
             if (!firstPhone) { firstPhone = target.phone; firstName = target.name; firstInvId = d._id; }
             else { firstInvId = d._id; }
           } else {
-            if (!firstError) firstError = d.error || 'Error al enviar';
+            if (d.invitationId) { firstInvId = d.invitationId; firstPhone = target.phone; firstName = target.name; }
+            if (!firstError) { firstError = d.error || 'Error al enviar'; }
           }
         } catch {}
       }
-      if (successCount === 0) { msg.className = 'msg show error'; msg.textContent = firstError || 'Error al enviar'; btn.disabled = false; btn.textContent = 'Enviar invitación'; return; }
+      if (successCount === 0) {
+        const base0 = window.location.origin;
+        let waHref0 = '';
+        if (firstPhone && firstInvId) {
+          const waTxt0 =
+`INVITACIÓN DE PÁDEL
+
+Te invito a jugar el ${date} a las ${time} en ${court}.
+
+CONFIRMAR: ${base0}/api/invitations/${firstInvId}/respond?status=accepted
+RECHAZAR: ${base0}/api/invitations/${firstInvId}/respond?status=rejected
+
+Padel Match - buscá tu dupla ideal`;
+          waHref0 = `https://wa.me/${firstPhone}?text=${encodeURIComponent(waTxt0)}`;
+        }
+        msg.className = 'msg show error';
+        msg.innerHTML = `<div style="font-size:0.9rem;font-weight:600;margin-bottom:8px;">${esc(firstError || 'Error al enviar')}</div>` +
+          (waHref0 ? `<a href="${waHref0}" target="_blank" rel="noopener" class="btn btn-primary" style="display:inline-block;width:100%;text-align:center;text-decoration:none;color:var(--bg);background:var(--green);padding:12px;border-radius:12px;font-weight:700;">💬 Reenviar WhatsApp</a>` : '');
+        btn.disabled = false; btn.textContent = 'Enviar invitación';
+        return;
+      }
       const base = window.location.origin;
+      let waHref = '';
       if (firstPhone) {
         const waTxt =
 `INVITACIÓN DE PÁDEL
@@ -972,13 +994,11 @@ CONFIRMAR: ${base}/api/invitations/${firstInvId}/respond?status=accepted
 RECHAZAR: ${base}/api/invitations/${firstInvId}/respond?status=rejected
 
 Padel Match - buscá tu dupla ideal`;
-        window.open(`https://wa.me/${firstPhone}?text=${encodeURIComponent(waTxt)}`, '_blank');
+        waHref = `https://wa.me/${firstPhone}?text=${encodeURIComponent(waTxt)}`;
       }
-      document.getElementById('inviteModal').classList.add('hidden');
-      document.getElementById('inviteTargetList').textContent = '';
-      window._inviteTargets = null;
-      selectedPlayers.clear();
-      loadApp();
+      msg.className = 'msg show success';
+      msg.innerHTML = `<div style="font-size:0.9rem;font-weight:600;margin-bottom:8px;">✅ Invitación enviada</div>` +
+        (waHref ? `<a href="${waHref}" target="_blank" rel="noopener" class="btn btn-primary" style="display:inline-block;width:100%;text-align:center;text-decoration:none;color:var(--bg);background:var(--green);padding:12px;border-radius:12px;font-weight:700;">💬 Abrir WhatsApp</a>` : '');
       btn.disabled = false; btn.textContent = 'Enviar invitación';
     });
 

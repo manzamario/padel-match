@@ -211,7 +211,7 @@ app.post('/api/invitations', async (req, res) => {
 
     const existing = await db.getPendingInvitationsForPlayer(toPlayerId);
     const alreadySent = existing.find(i => i.fromPlayerId === fromPlayerId);
-    if (alreadySent) return res.status(409).json({ error: 'Ya tenés una invitación pendiente con este jugador' });
+    if (alreadySent) return res.status(409).json({ error: 'Ya tenés una invitación pendiente con este jugador', invitationId: alreadySent.id });
 
     const id = uuidv4();
     const inv = await db.createInvitation(id, fromPlayerId, toPlayerId, date || '', time || '', court || '');
