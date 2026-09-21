@@ -472,6 +472,8 @@
     </div>
   </div>
 
+  <div style="text-align:center;padding:16px 12px 28px;font-size:0.72rem;color:var(--muted);opacity:0.6;">Padel Match <span id="appVersion"></span></div>
+
   <!-- INVITE MODAL -->
   <div id="inviteModal" class="modal-overlay hidden">
     <div class="modal-sheet">
@@ -513,10 +515,12 @@
 
   <script>
     const API = window.location.origin;
+    const APP_VERSION = '2.1.0';
     let myPlayerId = localStorage.getItem('padel_myId');
     const CATS = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
 
     async function init() {
+      document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
       // Event listeners for buttons (avoid Brave blocking inline onclick)
       document.getElementById('regBtn').addEventListener('click', doRegister);
       document.getElementById('showLoginBtn').addEventListener('click', showLogin);
