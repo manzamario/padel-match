@@ -482,16 +482,16 @@
       <div class="modal-field" id="invDateField">
         <label>Fecha</label>
         <div style="display:flex;gap:8px;">
-          <input type="text" id="invDate" placeholder="Ej: hoy, mañana, 28/07" autocomplete="off" style="flex:1;" />
-          <button type="button" id="invDateBtn" class="btn btn-ghost" style="padding:8px 12px;font-size:0.9rem;">📅 Calendar</button>
+          <input type="date" id="invDate" min="" style="flex:1;" />
+          <button type="button" id="invDateBtn" class="btn btn-ghost" style="padding:8px 12px;font-size:0.9rem;">📅 Quick</button>
         </div>
         <div id="invDateError" class="msg show error" style="display:none;margin-top:4px;">Seleccione una fecha</div>
       </div>
       <div class="modal-field" id="invTimeField">
         <label>Horario</label>
         <div style="display:flex;gap:8px;">
-          <input type="text" id="invTime" placeholder="Ej: 18, 10:30" autocomplete="off" style="flex:1;" />
-          <button type="button" id="invTimeBtn" class="btn btn-ghost" style="padding:8px 12px;font-size:0.9rem;" title="Add :00 if only hour entered">⏱️ Add :00</button>
+          <input type="time" id="invTime" style="flex:1;" />
+          <button type="button" id="invTimeBtn" class="btn btn-ghost" style="padding:8px 12px;font-size:0.9rem;">🕒 Ahora</button>
         </div>
         <div id="invTimeError" class="msg show error" style="display:none;margin-top:4px;"> Indique el horario</div>
       </div>
@@ -811,7 +811,7 @@
       if (e.target === this) closeInvite();
     });
 
-    // NUEVO: Date field with today suggestion and validation
+    // Native date picker (type=date, ISO value) + validation
     const invDate = document.getElementById('invDate');
     invDate.addEventListener('input', () => {
       if (!invDate.value) {
@@ -822,28 +822,17 @@
         document.getElementById('invDateError').style.display = 'none';
       }
     });
-    invDate.addEventListener('focus', () => {
-      if (!invDate.value) {
-        const today = new Date().toLocaleDateString('es-ES');
-        invDate.value = today;
-      }
-    });
 
-    // NUEVO: Time field with auto :00 and validation
+    // Convert ISO date (YYYY-MM-DD) to display format (DD/MM/YYYY)
+    function fmtDate(iso) {
+      if (!iso) return '';
+      const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+    }
+
+    // Native time picker + validation
     const invTime = document.getElementById('invTime');
     invTime.addEventListener('input', () => {
-      let val = invTime.value.trim();
-      if (val) {
-        const parts = val.split(':');
-        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-          const hours = parseInt(parts[0]), minutes = parseInt(parts[1]);
-          if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-            invTime.value = hours + ':' + (minutes < 10 ? '0' + minutes : minutes);
-          }
-        } else if (!isNaN(val) && parseInt(val) <= 23) {
-          invTime.value = val + ':00';
-        }
-      }
       if (!invTime.value) {
         document.getElementById('invTimeField').classList.add('error');
         document.getElementById('invTimeError').style.display = 'block';
@@ -853,25 +842,34 @@
       }
     });
 
+    function setInvTimeNow() {
+      const d = new Date();
+      invTime.value = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      invTime.dispatchEvent(new Event('input'));
+    }
+    document.getElementById('invTimeBtn').addEventListener('click', setInvTimeNow);
+
     function closeInvite() {
+      const existing = document.getElementById('calendarDropdown');
+      if (existing) existing.remove();
       document.getElementById('inviteModal').classList.add('hidden');
       document.getElementById('inviteTargetList').textContent = '';
       window._inviteTargets = null;
     }
 
-    // Calendar button functionality - rewrite with addEventListener
+    // Quick date shortcuts (native picker expects ISO values)
+    function isoDate(d) {
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
     document.getElementById('invDateBtn').addEventListener('click', () => {
-      const today = new Date();
-      const todayStr = today.toLocaleDateString('es-ES');
-      const tomorrow = new Date(); tomorrow.setDate(today.getDate() + 1);
-      const tomorrowStr = tomorrow.toLocaleDateString('es-ES');
-      const nextWeek = new Date(); nextWeek.setDate(today.getDate() + 7);
-      const nextWeekStr = nextWeek.toLocaleDateString('es-ES');
+      const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+      const nextWeek = new Date(); nextWeek.setDate(nextWeek.getDate() + 7);
 
       const options = [
-        { value: todayStr, text: `Hoy - ${todayStr}` },
-        { value: tomorrowStr, text: `Mañana - ${tomorrowStr}` },
-        { value: nextWeekStr, text: `Próxima semana - ${nextWeekStr}` }
+        { value: isoDate(new Date()), text: `Hoy - ${new Date().toLocaleDateString('es-ES')}` },
+        { value: isoDate(tomorrow), text: `Mañana - ${tomorrow.toLocaleDateString('es-ES')}` },
+        { value: isoDate(nextWeek), text: `Próxima semana - ${nextWeek.toLocaleDateString('es-ES')}` }
       ];
 
       const input = document.getElementById('invDate');
@@ -880,10 +878,10 @@
 
       const dropdown = document.createElement('div');
       dropdown.id = 'calendarDropdown';
-      dropdown.style.cssText = 'position:absolute;z-index:100;background:var(--bg);border:1px solid var(--border);padding:12px;border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,0.2);';
+      dropdown.style.cssText = 'position:absolute;z-index:100;background:var(--bg);border:1px solid var(--border);padding:12px;border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,0.2);width:220px;';
       dropdown.innerHTML = `
-        <div style="margin-bottom:8px;font-weight:600;font-size:0.85rem;">Seleccionar fecha</div>
-        <div style="max-height:200px;overflow-y:auto;" id="calendarOptions"></div>
+        <div style="margin-bottom:8px;font-weight:600;font-size:0.85rem;">Atajos de fecha</div>
+        <div id="calendarOptions"></div>
       `;
 
       const optsContainer = dropdown.querySelector('#calendarOptions');
@@ -913,19 +911,11 @@
       setTimeout(() => document.addEventListener('click', closeCalendar), 0);
     });
 
-    function closeInvite() {
-      const existing = document.getElementById('calendarDropdown');
-      if (existing) existing.remove();
-      document.getElementById('inviteModal').classList.add('hidden');
-      document.getElementById('inviteTargetList').textContent = '';
-      window._inviteTargets = null;
-    }
-
     // Invite send button
     document.getElementById('inviteSendBtn').addEventListener('click', async () => {
       const targets = window._inviteTargets;
       if (!targets || targets.length === 0) return;
-      const date = document.getElementById('invDate').value.trim();
+      const date = fmtDate(document.getElementById('invDate').value.trim());
       const time = document.getElementById('invTime').value.trim();
       const court = document.getElementById('invCourt').value.trim();
       const msg = document.getElementById('inviteModalMsg');
