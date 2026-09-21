@@ -1,4 +1,4 @@
-const CACHE_NAME = 'padel-match-v2.2.0';
+const CACHE_NAME = 'padel-match-v2.2.2';
 const urlsToCache = [
   './',
   './index.html',

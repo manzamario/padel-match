@@ -519,7 +519,7 @@
 
   <script>
     const API = window.location.origin;
-    const APP_VERSION = '2.2.1';
+    const APP_VERSION = '2.2.2';
     let myPlayerId = localStorage.getItem('padel_myId');
     const CATS = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
 
@@ -954,6 +954,7 @@
       let firstName = '';
       let firstError = '';
       let firstInvId = '';
+      let firstShort = '';
       for (const target of targets) {
         try {
           const r = await fetch(`${API}/api/invitations`, {
@@ -963,10 +964,11 @@
           const d = await r.json();
           if (r.ok) {
             successCount++;
-            if (!firstPhone) { firstPhone = target.phone; firstName = target.name; firstInvId = d._id; }
-            else { firstInvId = d._id; }
+            if (!firstPhone) { firstPhone = target.phone; firstName = target.name; firstInvId = d._id; firstShort = d.shortId; }
+            else { firstInvId = d._id; firstShort = d.shortId; }
           } else {
             if (d.invitationId) { firstInvId = d.invitationId; firstPhone = target.phone; firstName = target.name; }
+            if (d.shortId) firstShort = d.shortId;
             if (!firstError) { firstError = d.error || 'Error al enviar'; }
           }
         } catch {}
@@ -974,14 +976,14 @@
       if (successCount === 0) {
         const base0 = window.location.origin;
         let waHref0 = '';
-        if (firstPhone && firstInvId) {
+        if (firstPhone && firstShort) {
           const waTxt0 =
-`INVITACIÓN DE PÁDEL
+`🎾 INVITACIÓN DE PÁDEL
 
 Te invito a jugar el ${date} a las ${time} en ${court}.
 
-CONFIRMAR: ${base0}/api/invitations/${firstInvId}/respond?status=accepted
-RECHAZAR: ${base0}/api/invitations/${firstInvId}/respond?status=rejected
+✅ CONFIRMAR: ${base0}/i/${firstShort}
+❌ RECHAZAR: ${base0}/i/${firstShort}/rechazar
 
 Padel Match - buscá tu dupla ideal`;
           waHref0 = `https://wa.me/${firstPhone}?text=${encodeURIComponent(waTxt0)}`;
@@ -996,12 +998,12 @@ Padel Match - buscá tu dupla ideal`;
       let waHref = '';
       if (firstPhone) {
         const waTxt =
-`INVITACIÓN DE PÁDEL
+`🎾 INVITACIÓN DE PÁDEL
 
 Te invito a jugar el ${date} a las ${time} en ${court}.
 
-CONFIRMAR: ${base}/api/invitations/${firstInvId}/respond?status=accepted
-RECHAZAR: ${base}/api/invitations/${firstInvId}/respond?status=rejected
+✅ CONFIRMAR: ${base}/i/${firstShort}
+❌ RECHAZAR: ${base}/i/${firstShort}/rechazar
 
 Padel Match - buscá tu dupla ideal`;
         waHref = `https://wa.me/${firstPhone}?text=${encodeURIComponent(waTxt)}`;
@@ -1017,7 +1019,7 @@ Padel Match - buscá tu dupla ideal`;
       window._invById = {};
       if (!invs.length) { container.innerHTML = '<div class="empty-state">Sin invitaciones pendientes</div>'; return; }
       container.innerHTML = invs.map(inv => {
-        const time = new Date(inv.created_at).toLocaleString('es-AR');
+        const time = inv.createdAt ? new Date(inv.createdAt).toLocaleString('es-AR') : '';
         const when = inv.date ? `📅 ${esc(inv.date)}${inv.time ? ` ${esc(inv.time)}` : ''}${inv.court ? ` · ${esc(inv.court)}` : ''}` : '';
         window._invById[inv.id] = { name: inv.fromName, phone: inv.fromPhone, date: inv.date || '', time: inv.time || '', court: inv.court || '' };
         return `<div class="inv-item">
@@ -1036,7 +1038,7 @@ Padel Match - buscá tu dupla ideal`;
       const container = document.getElementById('sentInvitationsList');
       if (!invs.length) { container.innerHTML = '<div class="empty-state">Sin invitaciones enviadas</div>'; return; }
       container.innerHTML = invs.map(inv => {
-        const time = new Date(inv.created_at).toLocaleString('es-AR');
+        const time = inv.createdAt ? new Date(inv.createdAt).toLocaleString('es-AR') : '';
         const when = inv.date ? `📅 ${esc(inv.date)}${inv.time ? ` ${esc(inv.time)}` : ''}${inv.court ? ` · ${esc(inv.court)}` : ''}` : '';
         let state = '';
         if (inv.status === 'accepted') state = '<span style="color:var(--green);font-weight:600;">✔ Aceptada</span>';

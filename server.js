@@ -211,7 +211,7 @@ app.post('/api/invitations', async (req, res) => {
 
     const existing = await db.getPendingInvitationsForPlayer(toPlayerId);
     const alreadySent = existing.find(i => i.fromPlayerId === fromPlayerId);
-    if (alreadySent) return res.status(409).json({ error: 'Ya tenés una invitación pendiente con este jugador', invitationId: alreadySent.id });
+    if (alreadySent) return res.status(409).json({ error: 'Ya tenés una invitación pendiente con este jugador', invitationId: alreadySent.id, shortId: alreadySent.shortId });
 
     const id = uuidv4();
     const inv = await db.createInvitation(id, fromPlayerId, toPlayerId, date || '', time || '', court || '');
@@ -237,6 +237,26 @@ app.get('/api/invitations/sent/:playerId', async (req, res) => {
     res.json(invitations);
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/i/:shortId', async (req, res) => {
+  try {
+    const inv = await db.getInvitationByShortId(req.params.shortId);
+    if (!inv) return res.status(404).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Invitación no encontrada</h2></body></html>');
+    res.redirect(`/api/invitations/${inv._id}/respond?status=accepted`);
+  } catch (err) {
+    res.redirect('/');
+  }
+});
+
+app.get('/i/:shortId/rechazar', async (req, res) => {
+  try {
+    const inv = await db.getInvitationByShortId(req.params.shortId);
+    if (!inv) return res.status(404).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Invitación no encontrada</h2></body></html>');
+    res.redirect(`/api/invitations/${inv._id}/respond?status=rejected`);
+  } catch (err) {
+    res.redirect('/');
   }
 });
 

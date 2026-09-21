@@ -113,9 +113,24 @@ async function deleteInvitation(id) {
   await Invitation.findByIdAndDelete(id);
 }
 
+function genShortId() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let s = '';
+  for (let i = 0; i < 7; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
 async function createInvitation(id, fromId, toId, date = '', time = '', court = '') {
-  const inv = await Invitation.create({ _id: id, fromPlayer: fromId, toPlayer: toId, date, time, court });
+  let shortId = genShortId();
+  const existing = await Invitation.findOne({ shortId });
+  if (existing) shortId = genShortId();
+  const inv = await Invitation.create({ _id: id, shortId, fromPlayer: fromId, toPlayer: toId, date, time, court });
   return inv.toObject();
+}
+
+async function getInvitationByShortId(shortId) {
+  const inv = await Invitation.findOne({ shortId });
+  return inv ? inv.toObject() : null;
 }
 
 async function getInvitationWithFrom(id) {
@@ -146,6 +161,7 @@ async function getPendingInvitationsForPlayer(playerId) {
     .sort({ createdAt: -1 });
   return invs.map(i => ({
     id: i._id.toString(),
+    shortId: i.shortId || '',
     fromPlayerId: i.fromPlayer._id.toString(),
     fromName: i.fromPlayer.name,
     fromPhone: i.fromPlayer.phone,
@@ -259,7 +275,7 @@ module.exports = {
   verifyPlayerPassword,
   createPlayer, findOrCreatePendingPlayer, completeRegistration, getPlayer, resetPlayerPassword, getAllPlayers, findPlayerByPhone,
   toggleAvailability, addRejection, checkAndUnsuspend, deletePlayer, resetPlayer,
-  deleteInvitation, createInvitation, getInvitation, getInvitationWithFrom, getPendingInvitationsForPlayer, getSentInvitations,
+  deleteInvitation, createInvitation, getInvitationByShortId, getInvitation, getInvitationWithFrom, getPendingInvitationsForPlayer, getSentInvitations,
   respondInvitation, getInvitationStats, getRules, updateCategory,
   getAllPlayersFull, adminSuspendPlayer, adminUnsuspendPlayer, adminAddWarning,
   updateRule, getAdminStats
