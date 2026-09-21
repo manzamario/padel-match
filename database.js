@@ -29,6 +29,10 @@ async function createPlayer(id, name, phone, category, password) {
   return p.toObject();
 }
 
+async function getPlayer(id) {
+  return await Player.findOne({ id });
+}
+
 async function findPlayerByPhone(phone) {
   const p = await Player.findOne({ phone });
   return p ? p.toObject() : null;
@@ -235,7 +239,6 @@ async function getAdminStats() {
 
 module.exports = {
   ensureRules,
-  verifyPlayerPassword,
   verifyPlayerPassword,
   createPlayer, findOrCreatePendingPlayer, completeRegistration, getPlayer, getAllPlayers, findPlayerByPhone,
   toggleAvailability, addRejection, checkAndUnsuspend, deletePlayer, resetPlayer,
