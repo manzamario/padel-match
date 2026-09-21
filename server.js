@@ -480,8 +480,7 @@ app.put('/api/admin/players/:id/reset-password', requireAdmin, async (req, res) 
     if (!password || password.length < 4) return res.status(400).json({ error: 'Mínimo 4 caracteres' });
     const player = await db.getPlayer(req.params.id);
     if (!player) return res.status(404).json({ error: 'Jugador no encontrado' });
-    const bcrypt = require('bcryptjs');
-    player.password = await bcrypt.hash(password, 10);
+    player.password = password;
     await player.save();
     res.json({ ok: true });
   } catch (err) {
