@@ -109,6 +109,10 @@ async function resetPlayer(id) {
 }
 
 // --- INVITATIONS ---
+async function deleteInvitation(id) {
+  await Invitation.findByIdAndDelete(id);
+}
+
 async function createInvitation(id, fromId, toId, date = '', time = '', court = '') {
   const inv = await Invitation.create({ _id: id, fromPlayer: fromId, toPlayer: toId, date, time, court });
   return inv.toObject();
@@ -255,7 +259,7 @@ module.exports = {
   verifyPlayerPassword,
   createPlayer, findOrCreatePendingPlayer, completeRegistration, getPlayer, resetPlayerPassword, getAllPlayers, findPlayerByPhone,
   toggleAvailability, addRejection, checkAndUnsuspend, deletePlayer, resetPlayer,
-  createInvitation, getInvitation, getInvitationWithFrom, getPendingInvitationsForPlayer, getSentInvitations,
+  deleteInvitation, createInvitation, getInvitation, getInvitationWithFrom, getPendingInvitationsForPlayer, getSentInvitations,
   respondInvitation, getInvitationStats, getRules, updateCategory,
   getAllPlayersFull, adminSuspendPlayer, adminUnsuspendPlayer, adminAddWarning,
   updateRule, getAdminStats

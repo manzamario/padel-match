@@ -479,6 +479,15 @@ app.delete('/api/admin/players/:id', requireAdmin, async (req, res) => {
   }
 });
 
+app.delete('/api/admin/invitations/:id', requireAdmin, async (req, res) => {
+  try {
+    await db.deleteInvitation(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
 app.put('/api/admin/players/:id/reset-password', requireAdmin, async (req, res) => {
   try {
     const { password } = req.body;

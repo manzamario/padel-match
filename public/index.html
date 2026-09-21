@@ -942,6 +942,8 @@
       let successCount = 0;
       let firstPhone = '';
       let firstName = '';
+      let firstError = '';
+      let firstInvId = '';
       for (const target of targets) {
         try {
           const r = await fetch(`${API}/api/invitations`, {
@@ -951,11 +953,14 @@
           const d = await r.json();
           if (r.ok) {
             successCount++;
-            if (!firstPhone) { firstPhone = target.phone; firstName = target.name; }
+            if (!firstPhone) { firstPhone = target.phone; firstName = target.name; firstInvId = d._id; }
+            else { firstInvId = d._id; }
+          } else {
+            if (!firstError) firstError = d.error || 'Error al enviar';
           }
         } catch {}
       }
-      if (successCount === 0) { msg.className = 'msg show error'; msg.textContent = 'Error al enviar'; btn.disabled = false; btn.textContent = 'Enviar invitación'; return; }
+      if (successCount === 0) { msg.className = 'msg show error'; msg.textContent = firstError || 'Error al enviar'; btn.disabled = false; btn.textContent = 'Enviar invitación'; return; }
       const base = window.location.origin;
       if (firstPhone) {
         const waTxt =
@@ -963,8 +968,8 @@
 
 Te invito a jugar el ${date} a las ${time} en ${court}.
 
-CONFIRMAR: ${base}
-RECHAZAR: ${base}
+CONFIRMAR: ${base}/api/invitations/${firstInvId}/respond?status=accepted
+RECHAZAR: ${base}/api/invitations/${firstInvId}/respond?status=rejected
 
 Padel Match - buscá tu dupla ideal`;
         window.open(`https://wa.me/${firstPhone}?text=${encodeURIComponent(waTxt)}`, '_blank');
