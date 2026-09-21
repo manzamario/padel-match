@@ -217,6 +217,7 @@ app.post('/api/invitations', async (req, res) => {
     const inv = await db.createInvitation(id, fromPlayerId, toPlayerId, date || '', time || '', court || '');
     res.status(201).json(inv);
   } catch (err) {
+    console.error('POST /api/invitations error:', err.message, err.stack);
     res.status(500).json({ error: 'Error interno' });
   }
 });
