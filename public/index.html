@@ -513,29 +513,6 @@
     const CATS = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
 
     async function init() {
-      if (myPlayerId) {
-        const r = await fetch(`${API}/api/players/${myPlayerId}`).then(r => r.ok).catch(() => false);
-        if (r) { showApp(); return; }
-      }
-      showRegisterScreen();
-
-      // PWA Install logic
-      let deferredPrompt;
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        document.getElementById('installBtn').style.display = 'inline-flex';
-      });
-      window.installPWA = async () => {
-        if (!deferredPrompt) return;
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-          document.getElementById('installBtn').style.display = 'none';
-        }
-        deferredPrompt = null;
-      };
-
       // Event listeners for buttons (avoid Brave blocking inline onclick)
       document.getElementById('regBtn').addEventListener('click', doRegister);
       document.getElementById('showLoginBtn').addEventListener('click', showLogin);
@@ -557,8 +534,31 @@
             await fetch(`${API}/api/players/${p.id}/availability`, {
               method: 'PUT', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ available: false })
-            });
-          }
+      });
+
+      // PWA Install logic
+      let deferredPrompt;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById('installBtn').style.display = 'inline-flex';
+      });
+      window.installPWA = async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          document.getElementById('installBtn').style.display = 'none';
+        }
+        deferredPrompt = null;
+      };
+
+      if (myPlayerId) {
+        const r = await fetch(`${API}/api/players/${myPlayerId}`).then(r => r.ok).catch(() => false);
+        if (r) { showApp(); return; }
+      }
+      showRegisterScreen();
+    }
           loadAdminPlayers();
         } catch {}
       });
