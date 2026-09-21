@@ -519,7 +519,7 @@
       document.getElementById('showAdminLoginBtn').addEventListener('click', showAdminLogin);
       document.getElementById('loginBtn').addEventListener('click', doLoginSearch);
       document.getElementById('backToRegisterBtn').addEventListener('click', showRegisterScreen);
-      document.getElementById('installBtn').addEventListener('click', installPWA);
+      document.getElementById('installBtn').addEventListener('click', () => window.installPWA && window.installPWA());
       document.getElementById('adminLoginBtn').addEventListener('click', doAdminLogin);
       document.getElementById('backFromAdminLoginBtn').addEventListener('click', backFromAdminLogin);
       document.getElementById('adminLoginForm').addEventListener('submit', (e) => { e.preventDefault(); doAdminLogin(); });
@@ -534,6 +534,10 @@
             await fetch(`${API}/api/players/${p.id}/availability`, {
               method: 'PUT', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ available: false })
+            });
+          }
+          loadAdminPlayers();
+        } catch {}
       });
 
       // PWA Install logic
@@ -558,10 +562,6 @@
         if (r) { showApp(); return; }
       }
       showRegisterScreen();
-    }
-          loadAdminPlayers();
-        } catch {}
-      });
     }
 
     function showRegisterScreen() {
