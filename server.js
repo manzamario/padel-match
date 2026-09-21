@@ -480,12 +480,13 @@ app.put('/api/admin/players/:id/reset-password', requireAdmin, async (req, res) 
     if (!password || password.length < 4) return res.status(400).json({ error: 'Mínimo 4 caracteres' });
     const player = await db.getPlayer(req.params.id);
     if (!player) return res.status(404).json({ error: 'Jugador no encontrado' });
-    player.password = password;
-    await player.save();
+    const bcrypt = require('bcryptjs');
+    const hash = await bcrypt.hash(password, 10);
+    await db.resetPlayerPassword(req.params.id, hash);
     res.json({ ok: true });
   } catch (err) {
     console.error('Reset password error:', err.message);
-    res.status(500).json({ error: 'Error interno', detail: err.message });
+    res.status(500).json({ error: 'Error interno' });
   }
 });
 

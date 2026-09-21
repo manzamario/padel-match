@@ -33,6 +33,10 @@ async function getPlayer(id) {
   return await Player.findOne({ _id: id });
 }
 
+async function resetPlayerPassword(id, hashedPassword) {
+  return await Player.findOneAndUpdate({ _id: id }, { password: hashedPassword }, { new: true });
+}
+
 async function findPlayerByPhone(phone) {
   const p = await Player.findOne({ phone });
   return p ? p.toObject() : null;
@@ -240,7 +244,7 @@ async function getAdminStats() {
 module.exports = {
   ensureRules,
   verifyPlayerPassword,
-  createPlayer, findOrCreatePendingPlayer, completeRegistration, getPlayer, getAllPlayers, findPlayerByPhone,
+  createPlayer, findOrCreatePendingPlayer, completeRegistration, getPlayer, resetPlayerPassword, getAllPlayers, findPlayerByPhone,
   toggleAvailability, addRejection, checkAndUnsuspend, deletePlayer, resetPlayer,
   createInvitation, getInvitation, getInvitationWithFrom, getPendingInvitationsForPlayer, getSentInvitations,
   respondInvitation, getInvitationStats, getRules, updateCategory,
