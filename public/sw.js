@@ -1,4 +1,4 @@
-const CACHE_NAME = 'padel-match-v1';
+const CACHE_NAME = 'padel-match-v2.2.0';
 const urlsToCache = [
   './',
   './index.html',
@@ -20,6 +20,18 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then(res => {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+          return res;
+        })
+        .catch(() => caches.match(event.request).then(res => res || new Response('Offline', { status: 503 })))
+    );
+    return;
+  }
   event.respondWith(
     caches.match(event.request).then(res => res || fetch(event.request).catch(() => new Response('Offline', { status: 503 })))
   );
