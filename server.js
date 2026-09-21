@@ -484,7 +484,8 @@ app.put('/api/admin/players/:id/reset-password', requireAdmin, async (req, res) 
     await player.save();
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: 'Error interno' });
+    console.error('Reset password error:', err.message);
+    res.status(500).json({ error: 'Error interno', detail: err.message });
   }
 });
 
