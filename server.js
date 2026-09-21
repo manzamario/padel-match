@@ -197,7 +197,7 @@ app.delete('/api/players/:id', async (req, res) => {
 
 app.post('/api/invitations', async (req, res) => {
   try {
-    const { fromPlayerId, toPlayerId } = req.body;
+    const { fromPlayerId, toPlayerId, date, time, court } = req.body;
     if (!fromPlayerId || !toPlayerId) {
       return res.status(400).json({ error: 'fromPlayerId y toPlayerId requeridos' });
     }
@@ -214,7 +214,7 @@ app.post('/api/invitations', async (req, res) => {
     if (alreadySent) return res.status(409).json({ error: 'Ya tenés una invitación pendiente con este jugador' });
 
     const id = uuidv4();
-    const inv = await db.createInvitation(id, fromPlayerId, toPlayerId);
+    const inv = await db.createInvitation(id, fromPlayerId, toPlayerId, date || '', time || '', court || '');
     res.status(201).json(inv);
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
@@ -266,7 +266,9 @@ app.get('/api/invitations/:id/respond', async (req, res) => {
         <div class="card">
           <div class="icon">🎾</div>
           <h2>¡Tenés una invitación!</h2>
-          <p>${inv.fromName} te invitó a jugar al pádel. Para aceptar, completá tus datos.</p>
+          <p>${inv.fromName} te invitó a jugar al pádel.</p>
+          ${inv.date ? `<p class="detail">📅 ${inv.date} ${inv.time ? `a las ${inv.time}` : ''}${inv.court ? ` · ${inv.court}` : ''}</p>` : ''}
+          <p>Para aceptar, completá tus datos.</p>
 <form id="regForm" onsubmit="event.preventDefault();submitReg()">
               <div class="input-group"><label>Nombre completo</label><input type="text" id="regName" required placeholder="Tu nombre" /></div>
               <div class="input-group" style="margin-top:12px;"><label>Contraseña</label><input type="password" id="regPassword" required placeholder="Mínimo 4 caracteres" /></div>
@@ -303,6 +305,7 @@ app.get('/api/invitations/:id/respond', async (req, res) => {
         <h2>${isAccepted ? '¡Asistencia confirmada!' : 'Invitación rechazada'}</h2>
         <p>${isAccepted ? 'Has confirmado tu asistencia al partido con' : 'Has rechazado la invitación de'}</p>
         <p class="detail">${invite.fromName}</p>
+        ${invite.date ? `<p style="font-size:0.85rem;color:#f0f0f5;margin-top:6px;">📅 ${invite.date} ${invite.time ? `a las ${invite.time}` : ''}${invite.court ? ` · ${invite.court}` : ''}</p>` : ''}
         <p style="font-size:0.8rem;color:#6b6b80;margin-top:14px;">Notificando al jugador...</p>
         <a class="btn ${isAccepted ? 'btn-green' : 'btn-red'}" href="https://wa.me/${invite.fromPhone}?text=${encodeURIComponent(waMsg)}" id="waBtn" target="_blank">${isAccepted ? 'Contactar por WhatsApp' : 'Enviar mensaje'}</a>
         <br>

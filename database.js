@@ -109,8 +109,8 @@ async function resetPlayer(id) {
 }
 
 // --- INVITATIONS ---
-async function createInvitation(id, fromId, toId) {
-  const inv = await Invitation.create({ _id: id, fromPlayer: fromId, toPlayer: toId });
+async function createInvitation(id, fromId, toId, date = '', time = '', court = '') {
+  const inv = await Invitation.create({ _id: id, fromPlayer: fromId, toPlayer: toId, date, time, court });
   return inv.toObject();
 }
 
@@ -123,7 +123,10 @@ async function getInvitationWithFrom(id) {
     fromPhone: inv.fromPlayer?.phone || '',
     fromCategory: inv.fromPlayer?.category || '',
     status: inv.status,
-    createdAt: inv.createdAt
+    createdAt: inv.createdAt,
+    date: inv.date || '',
+    time: inv.time || '',
+    court: inv.court || ''
   };
 }
 
@@ -144,7 +147,10 @@ async function getPendingInvitationsForPlayer(playerId) {
     fromPhone: i.fromPlayer.phone,
     fromCategory: i.fromPlayer.category,
     status: i.status,
-    createdAt: i.createdAt
+    createdAt: i.createdAt,
+    date: i.date || '',
+    time: i.time || '',
+    court: i.court || ''
   }));
 }
 
@@ -157,7 +163,10 @@ async function getSentInvitations(playerId) {
     toName: i.toPlayer ? i.toPlayer.name : 'Desconocido',
     status: i.status,
     createdAt: i.createdAt,
-    respondedAt: i.respondedAt
+    respondedAt: i.respondedAt,
+    date: i.date || '',
+    time: i.time || '',
+    court: i.court || ''
   }));
 }
 

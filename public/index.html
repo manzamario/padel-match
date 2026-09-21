@@ -917,29 +917,6 @@
       setTimeout(() => document.addEventListener('click', closeCalendar), 0);
     });
 
-    // Time field with auto :00 and validation - fixed
-    invTime.addEventListener('input', () => {
-      let val = invTime.value.trim();
-      if (val) {
-        const parts = val.split(':');
-        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-          const hours = parseInt(parts[0]), minutes = parseInt(parts[1]);
-          if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-            invTime.value = hours + ':' + (minutes < 10 ? '0' + minutes : minutes);
-          }
-        } else if (!isNaN(val) && parseInt(val) <= 23) {
-          invTime.value = val + ':00';
-        }
-      }
-      if (!invTime.value) {
-        document.getElementById('invTimeField').classList.add('error');
-        document.getElementById('invTimeError').style.display = 'block';
-      } else {
-        document.getElementById('invTimeField').classList.remove('error');
-        document.getElementById('invTimeError').style.display = 'none';
-      }
-    });
-
     function closeInvite() {
       const existing = document.getElementById('calendarDropdown');
       if (existing) existing.remove();
@@ -983,7 +960,7 @@
         try {
           const r = await fetch(`${API}/api/invitations`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fromPlayerId: myPlayerId, toPlayerId: target.id })
+            body: JSON.stringify({ fromPlayerId: myPlayerId, toPlayerId: target.id, date, time, court })
           });
           const d = await r.json();
           if (r.ok) {
@@ -1019,9 +996,11 @@ Padel Match - buscá tu dupla ideal`;
       if (!invs.length) { container.innerHTML = '<div class="empty-state">Sin invitaciones pendientes</div>'; return; }
       container.innerHTML = invs.map(inv => {
         const time = new Date(inv.created_at).toLocaleString('es-AR');
+        const when = inv.date ? `📅 ${esc(inv.date)}${inv.time ? ` ${esc(inv.time)}` : ''}${inv.court ? ` · ${esc(inv.court)}` : ''}` : '';
         return `<div class="inv-item">
           <div class="inv-from">${esc(inv.fromName)}</div>
           <div class="inv-meta">${CATS[inv.fromCategory]||'N/A'} &middot; ${time}</div>
+          ${when ? `<div class="inv-meta" style="color:var(--amber);">${when}</div>` : ''}
           <div class="inv-actions">
             <button class="btn btn-sm btn-success" onclick="acceptInv('${inv.id}','${esc(inv.fromName)}','${inv.fromPhone}')">Aceptar</button>
             <button class="btn btn-sm btn-danger" onclick="rejectInv('${inv.id}')">Rechazar</button>
