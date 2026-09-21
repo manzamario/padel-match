@@ -399,7 +399,7 @@
         <div style="width:100%;max-width:360px;margin:0 auto;">
           <div class="register-card">
             <h2>Acceso Administrador</h2>
-            <form id="adminLoginForm" onsubmit="doAdminLogin();return false">
+            <form id="adminLoginForm">
               <div class="input-group">
                 <label>Contraseña</label>
                 <input type="password" id="adminPassword" autocomplete="off" placeholder="Contraseña maestra" required />
@@ -545,6 +545,7 @@
       document.getElementById('installBtn').addEventListener('click', installPWA);
       document.getElementById('adminLoginBtn').addEventListener('click', doAdminLogin);
       document.getElementById('backFromAdminLoginBtn').addEventListener('click', backFromAdminLogin);
+      document.getElementById('adminLoginForm').addEventListener('submit', (e) => { e.preventDefault(); doAdminLogin(); });
       document.getElementById('adminLogoutBtn').addEventListener('click', doAdminLogout);
       document.getElementById('adminAddPlayerBtn').addEventListener('click', adminAddPlayer);
       document.getElementById('setAllOfflineBtn').addEventListener('click', async () => {
