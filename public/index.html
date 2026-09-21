@@ -989,25 +989,32 @@ Padel Match - buscá tu dupla ideal`;
 
     function renderInvitations(invs) {
       const container = document.getElementById('invitationsList');
+      window._invById = {};
       if (!invs.length) { container.innerHTML = '<div class="empty-state">Sin invitaciones pendientes</div>'; return; }
       container.innerHTML = invs.map(inv => {
         const time = new Date(inv.created_at).toLocaleString('es-AR');
         const when = inv.date ? `📅 ${esc(inv.date)}${inv.time ? ` ${esc(inv.time)}` : ''}${inv.court ? ` · ${esc(inv.court)}` : ''}` : '';
+        window._invById[inv.id] = { name: inv.fromName, phone: inv.fromPhone, date: inv.date || '', time: inv.time || '', court: inv.court || '' };
         return `<div class="inv-item">
           <div class="inv-from">${esc(inv.fromName)}</div>
           <div class="inv-meta">${CATS[inv.fromCategory]||'N/A'} &middot; ${time}</div>
           ${when ? `<div class="inv-meta" style="color:var(--amber);">${when}</div>` : ''}
           <div class="inv-actions">
-            <button class="btn btn-sm btn-success" onclick="acceptInv('${inv.id}','${esc(inv.fromName)}','${inv.fromPhone}')">Aceptar</button>
+            <button class="btn btn-sm btn-success" onclick="acceptInv('${inv.id}')">Aceptar</button>
             <button class="btn btn-sm btn-danger" onclick="rejectInv('${inv.id}')">Rechazar</button>
           </div>
         </div>`;
       }).join('');
     }
 
-    async function acceptInv(id, name, phone) {
+    async function acceptInv(id) {
+      const data = window._invById && window._invById[id];
+      const name = data ? data.name : 'Desconocido';
+      const phone = data ? data.phone : '';
+      const when = data && data.date ? ` el ${data.date}${data.time ? ` a las ${data.time}` : ''}${data.court ? ` en ${data.court}` : ''}` : '';
+      const msg = `Hola ${name}! Acepto tu invitación para jugar 🎾${when}.`;
       const r = await fetch(`${API}/api/invitations/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'accepted' }) });
-      if (r.ok) { window.open(`https://wa.me/${phone}?text=Hola%20${encodeURIComponent(name)}!%20Acepto%20tu%20invitacion%20para%20jugar.%20Coordinemos%20horario.`, '_blank'); loadApp(); }
+      if (r.ok) { window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank'); loadApp(); }
     }
 
     async function rejectInv(id) {

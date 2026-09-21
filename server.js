@@ -285,8 +285,9 @@ app.get('/api/invitations/:id/respond', async (req, res) => {
     const invite = await db.getInvitationWithFrom(req.params.id);
     const base = `${req.protocol}://${req.get('host')}`;
     const isAccepted = status === 'accepted';
-    const acceptMsg = `Hola ${invite.fromName}! Acepté tu invitación para jugar al pádel 🎾 Coordinemos!`;
-    const rejectMsg = `Hola ${invite.fromName}! No voy a poder asistir a tu invitación. Disculpá.`;
+    const when = invite.date ? ` el ${invite.date}${invite.time ? ` a las ${invite.time}` : ''}${invite.court ? ` en ${invite.court}` : ''}` : '';
+    const acceptMsg = `Hola ${invite.fromName}! Acepté tu invitación para jugar al pádel 🎾${when}. Coordinemos!`;
+    const rejectMsg = `Hola ${invite.fromName}! No voy a poder asistir a tu invitación${when ? ` (${invite.date}${invite.time ? ` ${invite.time}` : ''})` : ''}. Disculpá.`;
     const waMsg = isAccepted ? acceptMsg : rejectMsg;
     res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Padel Match</title><style>
       *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:#0a0a0f;color:#f0f0f5;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
