@@ -30,7 +30,7 @@ async function createPlayer(id, name, phone, category, password) {
 }
 
 async function getPlayer(id) {
-  return await Player.findOne({ id });
+  return await Player.findOne({ _id: id });
 }
 
 async function findPlayerByPhone(phone) {
