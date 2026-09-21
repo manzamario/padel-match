@@ -68,6 +68,7 @@
       background-repeat: no-repeat; background-position: right 14px center;
     }
     .input-group select option { background: #1a1a24; color: var(--text); }
+    .pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(20%); background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.1rem; padding: 4px; z-index: 2; }
     .input-hint { font-size: 0.7rem; color: var(--muted); margin-top: 4px; padding-left: 2px; }
 
     .btn {
@@ -291,7 +292,8 @@
           </div>
           <div class="input-group">
             <label>Contraseña <span class="req">*</span></label>
-            <input type="password" id="regPassword" autocomplete="new-password" placeholder="Mínimo 4 caracteres" />
+                <input type="password" id="regPassword" autocomplete="new-password" placeholder="Mínimo 4 caracteres" />
+                <button type="button" class="pw-toggle" onclick="this.previousElementSibling.type=this.previousElementSibling.type==='password'?'text':'password';this.textContent=this.textContent==='👁'?'🙈':'👁'">👁</button>
           </div>
           <button class="btn btn-primary" id="regBtn">Crear cuenta</button>
           <div id="regMessage" class="msg"></div>
@@ -313,7 +315,8 @@
           </div>
           <div class="input-group">
             <label>Contraseña <span class="req">*</span></label>
-            <input type="password" id="loginPassword" autocomplete="current-password" placeholder="Tu contraseña" />
+                <input type="password" id="loginPassword" autocomplete="current-password" placeholder="Tu contraseña" />
+                <button type="button" class="pw-toggle" onclick="this.previousElementSibling.type=this.previousElementSibling.type==='password'?'text':'password';this.textContent=this.textContent==='👁'?'🙈':'👁'">👁</button>
           </div>
           <button class="btn btn-primary" id="loginBtn">Ingresar</button>
           <div id="loginMessage" class="msg"></div>
@@ -403,6 +406,7 @@
               <div class="input-group">
                 <label>Contraseña</label>
                 <input type="password" id="adminPassword" autocomplete="off" placeholder="Contraseña maestra" required />
+                <button type="button" class="pw-toggle" onclick="this.previousElementSibling.type=this.previousElementSibling.type==='password'?'text':'password';this.textContent=this.textContent==='👁'?'🙈':'👁'">👁</button>
               </div>
               <button type="button" class="btn btn-primary" id="adminLoginBtn">Ingresar</button>
               <div id="adminLoginMsg" class="msg"></div>
@@ -1206,6 +1210,7 @@ ${p.suspended
 <button class="btn btn-sm btn-ghost" onclick="adminWarn('${p.id}')">Advertir</button>
 <button class="btn btn-sm ${p.available ? 'btn-danger' : 'btn-primary'}" onclick="adminToggleAvailability('${p.id}')">${p.available ? '🔴 No disp' : '🟢 Disp'}</button>
 <button class="btn btn-sm btn-danger" onclick="adminDelete('${p.id}','${esc(p.name)}')">Eliminar</button>
+<button class="btn btn-sm btn-ghost" onclick="adminResetPassword('${p.id}','${esc(p.name)}')">🔑 Pass</button>
 </div>
           </div>`;
         }).join('');
@@ -1254,6 +1259,17 @@ ${p.suspended
       if (!confirm(`¿Eliminar permanentemente a ${name}? Esta acción no se puede deshacer.`)) return;
       const r = await fetch(`${API}/api/admin/players/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${adminToken}` } });
       if (r.ok) loadAdminPlayers(); else alert('Error');
+    }
+
+    async function adminResetPassword(id, name) {
+      const newPass = prompt(`Nueva contraseña para ${name}:`, '');
+      if (!newPass) return;
+      if (newPass.length < 4) { alert('Mínimo 4 caracteres'); return; }
+      const r = await fetch(`${API}/api/admin/players/${id}/reset-password`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify({ password: newPass })
+      });
+      if (r.ok) alert('Contraseña actualizada'); else { const d = await r.json(); alert(d.error || 'Error'); }
     }
 
     async function loadAdminRules() {

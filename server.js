@@ -474,6 +474,21 @@ app.delete('/api/admin/players/:id', requireAdmin, async (req, res) => {
   }
 });
 
+app.put('/api/admin/players/:id/reset-password', requireAdmin, async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password || password.length < 4) return res.status(400).json({ error: 'Mínimo 4 caracteres' });
+    const player = await db.getPlayer(req.params.id);
+    if (!player) return res.status(404).json({ error: 'Jugador no encontrado' });
+    const bcrypt = require('bcryptjs');
+    player.password = await bcrypt.hash(password, 10);
+    await player.save();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
 app.put('/api/admin/rules/:id', requireAdmin, async (req, res) => {
   try {
     const { content } = req.body;
