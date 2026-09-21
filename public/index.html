@@ -353,11 +353,15 @@
           <div class="profile-card" style="margin-bottom:12px;" id="miniProfile"></div>
 
           <div class="tabs" style="margin-bottom:8px;">
-            <button class="tab active" data-tab="invitationsTab">Invitaciones <span id="invTabCount" class="hidden badge" style="margin-left:4px;font-size:0.6rem;padding:1px 6px;"></span></button>
+            <button class="tab active" data-tab="invitationsTab">Recibidas <span id="invTabCount" class="hidden badge" style="margin-left:4px;font-size:0.6rem;padding:1px 6px;"></span></button>
+            <button class="tab" data-tab="sentTab">Enviadas</button>
             <button class="tab" data-tab="rulesTab">Reglas</button>
           </div>
           <div id="invitationsTab" class="tab-content active">
             <div id="invitationsList"><div class="empty-state">Sin invitaciones pendientes</div></div>
+          </div>
+          <div id="sentTab" class="tab-content">
+            <div id="sentInvitationsList"><div class="empty-state">Sin invitaciones enviadas</div></div>
           </div>
           <div id="rulesTab" class="tab-content">
             <div class="player-list" id="rulesList"></div>
@@ -515,7 +519,7 @@
 
   <script>
     const API = window.location.origin;
-    const APP_VERSION = '2.1.0';
+    const APP_VERSION = '2.2.0';
     let myPlayerId = localStorage.getItem('padel_myId');
     const CATS = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
 
@@ -685,10 +689,11 @@
     async function loadApp() {
       if (!myPlayerId) return;
       try {
-        const [me, players, pending, rules] = await Promise.all([
+        const [me, players, pending, sent, rules] = await Promise.all([
           fetch(`${API}/api/players/${myPlayerId}`).then(r => r.json()),
           fetch(`${API}/api/players`).then(r => r.json()),
           fetch(`${API}/api/invitations/pending/${myPlayerId}`).then(r => r.json()),
+          fetch(`${API}/api/invitations/sent/${myPlayerId}`).then(r => r.json()),
           fetch(`${API}/api/rules`).then(r => r.json())
         ]);
         window._allPlayersData = players;
@@ -696,6 +701,7 @@
         renderStatus(me);
         renderPlayers(players, me);
         renderInvitations(pending);
+        renderSentInvitations(sent);
         renderRules(rules);
         renderMiniProfile(me);
       } catch {}
@@ -1022,6 +1028,24 @@ Padel Match - buscá tu dupla ideal`;
             <button class="btn btn-sm btn-success" onclick="acceptInv('${inv.id}')">Aceptar</button>
             <button class="btn btn-sm btn-danger" onclick="rejectInv('${inv.id}')">Rechazar</button>
           </div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderSentInvitations(invs) {
+      const container = document.getElementById('sentInvitationsList');
+      if (!invs.length) { container.innerHTML = '<div class="empty-state">Sin invitaciones enviadas</div>'; return; }
+      container.innerHTML = invs.map(inv => {
+        const time = new Date(inv.created_at).toLocaleString('es-AR');
+        const when = inv.date ? `📅 ${esc(inv.date)}${inv.time ? ` ${esc(inv.time)}` : ''}${inv.court ? ` · ${esc(inv.court)}` : ''}` : '';
+        let state = '';
+        if (inv.status === 'accepted') state = '<span style="color:var(--green);font-weight:600;">✔ Aceptada</span>';
+        else if (inv.status === 'rejected') state = '<span style="color:var(--red);font-weight:600;">✖ Rechazada</span>';
+        else state = '<span style="color:var(--amber);font-weight:600;">⏳ Pendiente</span>';
+        return `<div class="inv-item">
+          <div class="inv-from">${esc(inv.toName)}</div>
+          <div class="inv-meta">${state} &middot; ${time}</div>
+          ${when ? `<div class="inv-meta" style="color:var(--amber);">${when}</div>` : ''}
         </div>`;
       }).join('');
     }
