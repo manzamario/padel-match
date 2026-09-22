@@ -218,6 +218,59 @@
     @keyframes fadeOverlay { from { opacity: 0; } to { opacity: 1; } }
     .animate-in { animation: fadeIn 0.4s ease; }
 
+    /* ─── CHAT ─── */
+    #chatScreen {
+      position: fixed; inset: 0; z-index: 950; background: var(--bg);
+      display: flex; flex-direction: column;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    .chat-header {
+      display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+      border-bottom: 1px solid var(--border); background: rgba(10,10,15,0.92);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    }
+    .chat-header h2 { font-size: 1rem; font-weight: 700; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-back {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 1.2rem; padding: 4px 8px; border-radius: 8px;
+    }
+    .chat-back:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+    .convo-item {
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+      border-bottom: 1px solid var(--border); cursor: pointer; transition: 0.15s;
+    }
+    .convo-item:hover, .convo-item:active { background: rgba(255,255,255,0.04); }
+    .avatar {
+      width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(37,211,102,0.15); color: var(--green);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 1.05rem; text-transform: uppercase;
+    }
+    .convo-main { flex: 1; min-width: 0; }
+    .convo-name { font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 6px; }
+    .convo-last { font-size: 0.78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .convo-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+    .convo-time { font-size: 0.68rem; color: var(--muted); }
+    .avatar-mini { width: 22px; height: 22px; font-size: 0.6rem; display: inline-flex; }
+
+    #chatMessages {
+      flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .bubble {
+      max-width: 78%; padding: 10px 14px; border-radius: 16px; font-size: 0.9rem;
+      line-height: 1.45; word-wrap: break-word; position: relative;
+    }
+    .bubble.mine { align-self: flex-end; background: var(--green); color: #000; border-bottom-right-radius: 6px; }
+    .bubble.theirs { align-self: flex-start; background: #1e1e2a; border: 1px solid var(--border); border-bottom-left-radius: 6px; }
+    .bubble .b-time { display: block; font-size: 0.62rem; opacity: 0.6; margin-top: 4px; text-align: right; }
+    .chat-input-row { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); background: rgba(10,10,15,0.92); }
+    .chat-input-row input {
+      flex: 1; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px;
+      font-size: 0.95rem; font-family: inherit; background: rgba(255,255,255,0.04); color: var(--text);
+    }
+    .chat-input-row input:focus { outline: none; border-color: var(--green); }
+    .chat-send-btn { padding: 0 18px; border: none; border-radius: 12px; background: var(--green); color: #000; font-weight: 700; cursor: pointer; font-size: 1.05rem; }
+
     /* ─── MODAL ─── */
     .modal-overlay {
       position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 999;
@@ -334,6 +387,8 @@
           <img src="Logo.png" alt="Padel Match" style="height:36px;width:auto;border-radius:8px;" />
           <div class="top-actions">
             <button type="button" id="installBtn" class="btn btn-ghost btn-sm" style="display:none;">Instalar App</button>
+            <button type="button" id="notifBtn" class="pill-toggle off" title="Activar notificaciones del celular"><span class="pill-dot" id="notifDot"></span><span id="notifLabel">🔔</span></button>
+            <button type="button" id="chatBtn" class="pill-toggle" title="Mensajes" onclick="openChatList()">💬 <span id="chatBadge" class="badge hidden" style="margin-left:4px;font-size:0.6rem;padding:1px 6px;">0</span></button>
             <div id="invBadge" class="badge hidden">0</div>
             <div id="statusToggle" class="pill-toggle on">
               <span class="pill-dot on" id="statusDot"></span>
@@ -517,14 +572,44 @@
     </div>
   </div>
 
+  <!-- CHAT OVERLAY -->
+  <div id="chatScreen" class="hidden">
+    <div id="chatListView">
+      <div class="chat-header">
+        <h2>💬 <span style="color:var(--green);">Mensajes</span></h2>
+        <button class="chat-back" onclick="closeChatList()">✕</button>
+      </div>
+      <div id="chatList" class="player-list" style="padding:8px;">
+        <div class="empty-state">Cargando conversaciones...</div>
+      </div>
+    </div>
+
+    <div id="chatRoomView" class="hidden">
+      <div class="chat-header">
+        <button class="chat-back" onclick="closeChatRoom()">←</button>
+        <h2><span id="chatRoomTitle">Chat</span></h2>
+        <button class="chat-back" onclick="closeChatRoom()">✕</button>
+      </div>
+      <div id="chatMessages"><div class="empty-state">Sin mensajes todavía</div></div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Escribí un mensaje..." autocomplete="off" />
+        <button class="chat-send-btn" onclick="sendChatMessage()">➤</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const API = window.location.origin;
-    const APP_VERSION = '2.2.2';
+    const APP_VERSION = '2.3.0';
     let myPlayerId = localStorage.getItem('padel_myId');
     const CATS = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
 
     async function init() {
       document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
+      // PWA: registrar service worker (necesario para notificaciones push y offline)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      }
       // Event listeners for buttons (avoid Brave blocking inline onclick)
       document.getElementById('regBtn').addEventListener('click', doRegister);
       document.getElementById('showLoginBtn').addEventListener('click', showLogin);
@@ -597,6 +682,7 @@
       hideAll();
       document.getElementById('appScreen').classList.remove('hidden');
       loadApp();
+      setupNotifications();
       setInterval(loadApp, 15000);
     }
 
@@ -689,12 +775,13 @@
     async function loadApp() {
       if (!myPlayerId) return;
       try {
-        const [me, players, pending, sent, rules] = await Promise.all([
+        const [me, players, pending, sent, rules, convos] = await Promise.all([
           fetch(`${API}/api/players/${myPlayerId}`).then(r => r.json()),
           fetch(`${API}/api/players`).then(r => r.json()),
           fetch(`${API}/api/invitations/pending/${myPlayerId}`).then(r => r.json()),
           fetch(`${API}/api/invitations/sent/${myPlayerId}`).then(r => r.json()),
-          fetch(`${API}/api/rules`).then(r => r.json())
+          fetch(`${API}/api/rules`).then(r => r.json()),
+          fetch(`${API}/api/conversations/${myPlayerId}`).then(r => r.json())
         ]);
         window._allPlayersData = players;
         renderHeader(me, pending.length);
@@ -704,6 +791,7 @@
         renderSentInvitations(sent);
         renderRules(rules);
         renderMiniProfile(me);
+        updateChatBadge(convos);
       } catch {}
     }
 
@@ -760,6 +848,9 @@
           <div class="player-info">
             <div class="player-row"><span class="status-dot online"></span><span class="p-name">${esc(p.name)}</span></div>
             <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'Sin categoría'}</span><span class="p-phone">${esc(p.phone)}</span></div>
+          </div>
+          <div class="p-actions" style="flex-shrink:0;">
+            <button class="btn btn-sm btn-ghost" style="width:auto;padding:8px 10px;" onclick="event.stopPropagation();openChatWith('${p.id}','${esc(p.name)}')" title="Enviar mensaje">💬</button>
           </div>
         </div>`;
       }).join('');
@@ -1352,6 +1443,277 @@ ${p.suspended
         el.classList.add('animate-in');
       });
     });
+
+    // ═══════════════ CHAT 1 A 1 ═══════════════
+    let chatConvId = null;
+    let chatPeerName = '';
+    let chatLastMsgAt = null;
+    let chatPollTimer = null;
+    let chatOpen = false;
+
+    function updateChatBadge(convos) {
+      window._convosData = convos || [];
+      const total = (convos || []).reduce((s, c) => s + (c.unread || 0), 0);
+      const b = document.getElementById('chatBadge');
+      if (total > 0) { b.textContent = total; b.classList.remove('hidden'); }
+      else { b.classList.add('hidden'); }
+    }
+
+    async function refreshChatBadge() {
+      try {
+        const convos = await (await fetch(`${API}/api/conversations/${myPlayerId}`)).json();
+        updateChatBadge(convos);
+        const listEl = document.getElementById('chatList');
+        if (listEl && listEl.offsetParent !== null) renderChatList();
+      } catch {}
+    }
+
+    async function openChatList() {
+      if (!myPlayerId) return;
+      document.getElementById('chatScreen').classList.remove('hidden');
+      document.getElementById('chatRoomView').classList.add('hidden');
+      document.getElementById('chatListView').classList.remove('hidden');
+      document.getElementById('chatList').innerHTML = '<div class="empty-state">Cargando conversaciones...</div>';
+      try {
+        const convos = await (await fetch(`${API}/api/conversations/${myPlayerId}`)).json();
+        updateChatBadge(convos);
+        renderChatList();
+      } catch {}
+    }
+
+    function closeChatList() {
+      chatOpen = false;
+      if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+      document.getElementById('chatScreen').classList.add('hidden');
+      refreshChatBadge();
+    }
+
+    function renderChatList() {
+      const list = window._convosData || [];
+      const box = document.getElementById('chatList');
+      if (!list.length) {
+        box.innerHTML = '<div class="empty-state">Sin conversaciones todavía.<br>Elegí un jugador disponible y tocá el botón 💬 para escribirle por mensaje.</div>';
+        return;
+      }
+      box.innerHTML = list.map(c => {
+        const name = c.peer && c.peer.name ? c.peer.name : 'Desconocido';
+        const last = c.lastMessage
+          ? (c.lastMessage.from === myPlayerId ? 'Vos: ' : '') + esc(c.lastMessage.text)
+          : 'Sin mensajes todavía';
+        const time = c.updatedAt ? new Date(c.updatedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+        const unread = c.unread > 0 ? `<span class="badge" style="font-size:0.6rem;padding:1px 6px;">${c.unread}</span>` : '';
+        const ini = (name.trim().charAt(0) || '?');
+        return `<div class="convo-item" onclick="openChatFromConvo('${c.id}','${esc(name)}')">
+          <div class="avatar">${esc(ini)}</div>
+          <div class="convo-main">
+            <div class="convo-name">${esc(name)} ${unread}</div>
+            <div class="convo-last">${last}</div>
+          </div>
+          <div class="convo-right"><span class="convo-time">${time}</span></div>
+        </div>`;
+      }).join('');
+    }
+
+    async function openChatWith(peerId, peerName) {
+      if (!myPlayerId || peerId === myPlayerId) return;
+      try {
+        const convo = await (await fetch(`${API}/api/conversations/with/${myPlayerId}/${peerId}`)).json();
+        if (convo && convo.id) {
+          document.getElementById('chatScreen').classList.remove('hidden');
+          openChatRoom(convo.id, peerName || (convo.peer && convo.peer.name) || 'Chat');
+        } else alert('No se pudo abrir el chat');
+      } catch { alert('Error de conexión'); }
+    }
+
+    async function openChatFromConvo(convId, peerName) {
+      document.getElementById('chatListView').classList.add('hidden');
+      openChatRoom(convId, peerName);
+    }
+
+    async function openChatRoom(convId, peerName) {
+      chatConvId = convId;
+      chatPeerName = peerName;
+      chatOpen = true;
+      document.getElementById('chatRoomView').classList.remove('hidden');
+      document.getElementById('chatRoomTitle').textContent = chatPeerName;
+      const box = document.getElementById('chatMessages');
+      box.innerHTML = '<div class="empty-state">Cargando...</div>';
+      try {
+        const msgs = await (await fetch(`${API}/api/conversations/${convId}/messages`)).json();
+        await fetch(`${API}/api/conversations/${convId}/read`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: myPlayerId })
+        });
+        chatLastMsgAt = msgs.length ? msgs[msgs.length - 1].at : null;
+        renderChatMessages(msgs, false);
+      } catch {
+        box.innerHTML = '<div class="empty-state">Error al cargar los mensajes</div>';
+      }
+      if (chatPollTimer) clearInterval(chatPollTimer);
+      chatPollTimer = setInterval(pollChatRoom, 8000);
+      refreshChatBadge();
+      document.getElementById('chatInput').focus();
+    }
+
+    function renderChatMessages(messages, append) {
+      const box = document.getElementById('chatMessages');
+      if (!append) box.innerHTML = '';
+      for (const m of messages) {
+        const mine = m.from === myPlayerId;
+        const time = m.at ? new Date(m.at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+        box.innerHTML += `<div class="bubble ${mine ? 'mine' : 'theirs'}">${esc(m.text)}<span class="b-time">${time}</span></div>`;
+      }
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function pollChatRoom() {
+      if (!chatConvId || !chatOpen) return;
+      try {
+        const msgs = await (await fetch(`${API}/api/conversations/${chatConvId}/messages?since=${encodeURIComponent(chatLastMsgAt || '')}`)).json();
+        if (msgs.length) {
+          chatLastMsgAt = msgs[msgs.length - 1].at;
+          renderChatMessages(msgs, true);
+        }
+        await fetch(`${API}/api/conversations/${chatConvId}/read`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: myPlayerId })
+        });
+        refreshChatBadge();
+      } catch {}
+    }
+
+    async function sendChatMessage() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text || !chatConvId) return;
+      input.value = '';
+      try {
+        const r = await fetch(`${API}/api/conversations/${chatConvId}/messages`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from: myPlayerId, text })
+        });
+        const m = await r.json();
+        if (r.ok) {
+          chatLastMsgAt = m.at;
+          renderChatMessages([m], true);
+          refreshChatBadge();
+        } else input.value = text;
+      } catch { input.value = text; }
+    }
+
+    function closeChatRoom() {
+      chatOpen = false;
+      chatConvId = null;
+      if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+      document.getElementById('chatRoomView').classList.add('hidden');
+      document.getElementById('chatListView').classList.remove('hidden');
+      renderChatList();
+      refreshChatBadge();
+    }
+
+    document.getElementById('chatInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendChatMessage();
+    });
+
+    // ═══════════════ NOTIFICACIONES PUSH ═══════════════
+    let vapidPubKey = null;
+    let pushEnabled = false;
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+      return outputArray;
+    }
+
+    function updateNotifBtn(on) {
+      const btn = document.getElementById('notifBtn');
+      const dot = document.getElementById('notifDot');
+      const lbl = document.getElementById('notifLabel');
+      btn.classList.toggle('on', on);
+      btn.classList.toggle('off', !on);
+      dot.className = 'pill-dot ' + (on ? 'on' : 'off');
+      lbl.textContent = on ? '🔔' : '🔕';
+      btn.title = on ? 'Notificaciones activadas (tocá para desactivarlas)' : 'Activar notificaciones del celular';
+    }
+
+    async function setupNotifications() {
+      if (!myPlayerId) return;
+      try {
+        const cfg = await (await fetch(`${API}/api/push/public-key`)).json();
+        vapidPubKey = cfg.enabled && cfg.publicKey ? cfg.publicKey : null;
+      } catch {}
+      if (!('Notification' in window) || !vapidPubKey) { updateNotifBtn(false); return; }
+      let sub = null;
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        sub = await reg.pushManager.getSubscription();
+      } catch {}
+      if (sub) {
+        pushEnabled = true;
+        try {
+          await fetch(`${API}/api/push/subscribe`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playerId: myPlayerId, subscription: sub.toJSON() })
+          });
+        } catch {}
+      } else if (Notification.permission === 'granted') {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          const newSub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidPubKey) });
+          await fetch(`${API}/api/push/subscribe`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playerId: myPlayerId, subscription: newSub.toJSON() })
+          });
+          pushEnabled = true;
+        } catch {}
+      }
+      updateNotifBtn(pushEnabled);
+      if (Notification.permission === 'default' && !pushEnabled) {
+        const banner = document.getElementById('warnBanner');
+        if (banner) {
+          banner.className = 'warn-banner';
+          banner.innerHTML = '🔔 Activá las notificaciones para enterarte al instante de invitaciones y mensajes. <button class="btn btn-sm btn-primary" style="width:auto;margin-left:8px;margin-top:6px;" onclick="toggleNotifications()">Activar</button>';
+        }
+      }
+    }
+
+    async function toggleNotifications() {
+      if (!vapidPubKey || !('Notification' in window)) { alert('Las notificaciones no están disponibles en este navegador'); return; }
+      if (pushEnabled) {
+        try {
+          const sub = await navigator.serviceWorker.ready.then(r => r.pushManager.getSubscription());
+          if (sub) {
+            await sub.unsubscribe();
+            await fetch(`${API}/api/push/unsubscribe`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ subscription: sub.toJSON() })
+            });
+          }
+        } catch {}
+        pushEnabled = false;
+        updateNotifBtn(false);
+        return;
+      }
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { updateNotifBtn(false); return; }
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidPubKey) });
+        await fetch(`${API}/api/push/subscribe`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: myPlayerId, subscription: sub.toJSON() })
+        });
+        pushEnabled = true;
+        const banner = document.getElementById('warnBanner');
+        if (banner) banner.classList.add('hidden');
+      } catch { alert('No se pudieron activar las notificaciones'); }
+      updateNotifBtn(pushEnabled);
+    }
+
+    document.getElementById('notifBtn').addEventListener('click', toggleNotifications);
 
     init();
   </script>

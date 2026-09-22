@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const webpush = require('web-push');
 const db = require('./database');
 const Player = require('./models/Player');
 
@@ -35,6 +36,43 @@ const MONGODB_OPTIONS = {
 
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'https://padel-match-p50g.onrender.com';
 
+// ─── WEB PUSH (VAPID) ─────────────────────────────────
+const fs = require('fs');
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@padel-match.app';
+
+// Fallback local (desarrollo): push-keys.json es gitignored
+let pushReady = false;
+try {
+  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    pushReady = true;
+  } else if (fs.existsSync(path.join(__dirname, 'push-keys.json'))) {
+    const keys = JSON.parse(fs.readFileSync(path.join(__dirname, 'push-keys.json'), 'utf8'));
+    webpush.setVapidDetails(keys.subject || VAPID_SUBJECT, keys.publicKey, keys.privateKey);
+    pushReady = true;
+  }
+} catch (err) {
+  console.error('VAPID setup error:', err.message);
+}
+
+async function sendPushToPlayer(toPlayerId, title, body, url) {
+  if (!pushReady || !toPlayerId) return;
+  const subs = await db.getPushSubscriptions(toPlayerId).catch(() => []);
+  if (!subs.length) return;
+  const payload = JSON.stringify({ title, body, url: url || '/', icon: '/Logo.png', badge: '/Logo.png' });
+  for (const sub of subs) {
+    try {
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload);
+    } catch (err) {
+      if (err.statusCode === 404 || err.statusCode === 410) {
+        db.removePushSubscription(sub.endpoint).catch(() => {});
+      }
+    }
+  }
+}
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -55,8 +93,8 @@ app.use(helmet.hidePoweredBy());
 app.use(helmet.referrerPolicy({ policy: 'no-referrer' }));
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 60 * 1000,
+  max: 120,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes, intentá de nuevo más tarde' },
@@ -72,6 +110,7 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/admin', apiLimiter);
 app.use('/api/invitations', apiLimiter);
+app.use('/api/push', apiLimiter);
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -215,6 +254,12 @@ app.post('/api/invitations', async (req, res) => {
 
     const id = uuidv4();
     const inv = await db.createInvitation(id, fromPlayerId, toPlayerId, date || '', time || '', court || '');
+    const detail = [
+      date ? `📅 ${date}` : '',
+      time ? `🕒 ${time}` : '',
+      court ? `📍 ${court}` : ''
+    ].filter(Boolean).join(' ');
+    sendPushToPlayer(toPlayerId, `${from.name} te invitó a jugar 🎾`, detail || 'Mirá tu invitación en la app', '/');
     res.status(201).json(inv);
   } catch (err) {
     console.error('POST /api/invitations error:', err.message);
@@ -304,6 +349,11 @@ app.get('/api/invitations/:id/respond', async (req, res) => {
     const result = await db.respondInvitation(req.params.id, status);
     if (!result) return res.status(500).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Error al procesar</h2></body></html>');
     const invite = await db.getInvitationWithFrom(req.params.id);
+    if (invite) {
+      const toInfo = await db.getPlayer(inv.toPlayer.toString());
+      const msgs = { accepted: 'aceptó tu invitación ✅', rejected: 'rechazó tu invitación ❌' };
+      sendPushToPlayer(invite.fromPlayerId || inv.fromPlayer, `${toInfo ? toInfo.name : 'Un jugador'} ${msgs[status]}`, `${invite.date ? `📅 ${invite.date} ` : ''}${invite.court ? `📍 ${invite.court}` : ''}`.trim(), '/');
+    }
     const base = `${req.protocol}://${req.get('host')}`;
     const isAccepted = status === 'accepted';
     const when = invite.date ? ` el ${invite.date}${invite.time ? ` a las ${invite.time}` : ''}${invite.court ? ` en ${invite.court}` : ''}` : '';
@@ -350,6 +400,10 @@ app.post('/api/invitations/:id/register', async (req, res) => {
     const player = await db.completeRegistration(inv.toPlayer, name.trim(), password);
     if (!player) return res.status(500).json({ error: 'Error al crear perfil' });
     await db.respondInvitation(req.params.id, 'accepted');
+    const inv2 = await db.getInvitation(req.params.id);
+    if (inv2 && inv2.fromPlayer) {
+      sendPushToPlayer(inv2.fromPlayer.toString(), `${name.trim()} aceptó tu invitación ✅`, `${inv2.date ? `📅 ${inv2.date} ` : ''}${inv2.court ? `📍 ${inv2.court}` : ''}`.trim(), '/');
+    }
     res.json({ success: true, playerId: player.id });
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
@@ -364,6 +418,12 @@ app.put('/api/invitations/:id', async (req, res) => {
     }
     const result = await db.respondInvitation(req.params.id, status);
     if (!result) return res.status(404).json({ error: 'Invitación no encontrada o ya respondida' });
+    const invAfter = await Invitation.findById(req.params.id);
+    if (invAfter && invAfter.fromPlayer && invAfter.toPlayer) {
+      const responder = await db.getPlayer(invAfter.toPlayer.toString());
+      const msgs = { accepted: 'aceptó tu invitación ✅', rejected: 'rechazó tu invitación ❌' };
+      sendPushToPlayer(invAfter.fromPlayer.toString(), `${responder ? responder.name : 'Un jugador'} ${msgs[status]}`, `${invAfter.date ? `📅 ${invAfter.date} ` : ''}${invAfter.court ? `📍 ${invAfter.court}` : ''}`.trim(), '/');
+    }
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
@@ -462,6 +522,7 @@ app.put('/api/admin/players/:id/suspend', requireAdmin, async (req, res) => {
     const { days } = req.body;
     const result = await db.adminSuspendPlayer(req.params.id, days || 30);
     if (!result) return res.status(404).json({ error: 'Jugador no encontrado' });
+    sendPushToPlayer(req.params.id, `Estás suspendido por ${days || 30} días ⛔`, 'Incurriste en una falta según las reglas de Padel Match', '/');
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
@@ -539,6 +600,106 @@ app.put('/api/admin/rules/:id', requireAdmin, async (req, res) => {
 app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   try {
     res.json(await db.getAdminStats());
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// ─── CHAT & PUSH ───────────────────────────────────────
+
+const msgLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados mensajes, intentá de nuevo en un momento' },
+});
+
+app.get('/api/push/public-key', (req, res) => {
+  const key = (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) ? VAPID_PUBLIC_KEY : (pushReady && (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'push-keys.json'), 'utf8')).publicKey; } catch { return null; } })());
+  res.json({ enabled: pushReady, publicKey: key || null });
+});
+
+app.post('/api/push/subscribe', async (req, res) => {
+  try {
+    const { playerId, subscription } = req.body;
+    if (!playerId || !subscription) return res.status(400).json({ error: 'playerId y subscription requeridos' });
+    const player = await db.getPlayer(playerId);
+    if (!player) return res.status(404).json({ error: 'Jugador no encontrado' });
+    if (!pushReady) return res.status(503).json({ error: 'Notificaciones no configuradas' });
+    await db.savePushSubscription(playerId, subscription);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.post('/api/push/unsubscribe', async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription) return res.status(400).json({ error: 'subscription requerida' });
+    await db.removePushSubscription(subscription.endpoint);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/api/conversations/:playerId', async (req, res) => {
+  try {
+    const convs = await db.getConversationsForPlayer(req.params.playerId);
+    res.json(convs);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/api/conversations/with/:a/:b', async (req, res) => {
+  try {
+    const convo = await db.getOrCreateConversation(req.params.a, req.params.b);
+    if (!convo) return res.status(404).json({ error: 'Conversación no disponible' });
+    await db.markConversationRead(convo.id, req.params.a);
+    res.json(convo);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/api/conversations/:id/messages', async (req, res) => {
+  try {
+    const messages = await db.getConversationMessages(req.params.id, req.query.since || null);
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.post('/api/conversations/:id/messages', msgLimiter, async (req, res) => {
+  try {
+    const { from, text } = req.body;
+    if (!from || !text) return res.status(400).json({ error: 'from y text requeridos' });
+    const msg = await db.sendMessage(req.params.id, from, text);
+    if (!msg) return res.status(404).json({ error: 'Conversación no encontrada' });
+    const conv = await mongoose.model('Conversation').findById(req.params.id);
+    if (conv) {
+      const peerId = conv.participants.find(p => p.toString() !== from);
+      if (peerId) {
+        sendPushToPlayer(peerId.toString(), `Nuevo mensaje de ${msg.fromName} 💬`, msg.text.length > 80 ? msg.text.slice(0, 80) + '…' : msg.text, '/');
+      }
+    }
+    res.status(201).json(msg);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.post('/api/conversations/:id/read', async (req, res) => {
+  try {
+    const { playerId } = req.body;
+    if (!playerId) return res.status(400).json({ error: 'playerId requerido' });
+    const ok = await db.markConversationRead(req.params.id, playerId);
+    if (!ok) return res.status(404).json({ error: 'Conversación no encontrada' });
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
   }

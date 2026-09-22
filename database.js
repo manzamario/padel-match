@@ -1,6 +1,9 @@
 const Player = require('./models/Player');
 const Invitation = require('./models/Invitation');
 const Rule = require('./models/Rule');
+const Conversation = require('./models/Conversation');
+const Message = require('./models/Message');
+const PushSubscription = require('./models/PushSubscription');
 
 const DEFAULT_RULES = [
   '1. DISPONIBILIDAD OBLIGATORIA: Todo jugador debe mantener actualizado su estado de disponibilidad (disponible/no disponible) en todo momento. Aparecer como "disponible" implica compromiso a responder invitaciones en tiempo y forma.',
@@ -224,6 +227,164 @@ async function getRules() {
   return rules.map(r => ({ id: r._id, content: r.content }));
 }
 
+// --- CHAT ---
+function makeConvoId() {
+  return 'cv_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+function sortedPair(a, b) {
+  return a < b ? [a, b] : [b, a];
+}
+
+async function serializeConversation(conv, playerId) {
+  const peers = conv.participants.filter(p => p.toString() !== playerId);
+  const peerId = peers[0] || conv.participants[0];
+  const peerP = await Player.findById(peerId);
+  const peer = peerP ? { id: peerP._id.toString(), name: peerP.name, phone: peerP.phone, category: peerP.category, available: peerP.available } : { id: peerId.toString(), name: 'Desconocido', phone: '', category: '', available: false };
+  const last = conv.lastMessage || {};
+  const lastFromP = last.from ? await Player.findById(last.from) : null;
+  return {
+    id: conv._id.toString(),
+    peer,
+    lastMessage: last.text ? { text: last.text, from: last.from || '', fromName: lastFromP ? lastFromP.name : '', at: last.at || null } : null,
+    updatedAt: conv.updatedAt || conv.createdAt
+  };
+}
+
+async function getUnreadMap(conversationIds, playerId) {
+  if (!conversationIds.length) return new Map();
+  const rows = await Message.aggregate([
+    { $match: { conversation: { $in: conversationIds }, from: { $ne: playerId }, readBy: { $ne: playerId } } },
+    { $group: { _id: '$conversation', count: { $sum: 1 } } }
+  ]);
+  return new Map(rows.map(r => [r._id.toString(), r.count]));
+}
+
+async function getOrCreateConversation(aId, bId) {
+  if (aId === bId) return null;
+  let conv = await Conversation.findOne({ participants: { $all: [aId, bId] } });
+  if (!conv) {
+    const [p1, p2] = await Promise.all([Player.findById(aId), Player.findById(bId)]);
+    if (!p1 || !p2) return null;
+    conv = await Conversation.create({ _id: makeConvoId(), participants: sortedPair(aId, bId) });
+  }
+  const messages = await Message.find({ conversation: conv._id.toString() }).sort({ createdAt: 1 });
+  const names = {};
+  for (const m of messages) {
+    if (names[m.from] === undefined) {
+      const p = await Player.findById(m.from);
+      names[m.from] = p ? p.name : 'Desconocido';
+    }
+  }
+  return {
+    id: conv._id.toString(),
+    peer: (await serializeConversation(conv, aId)).peer,
+    messages: messages.map(m => ({
+      id: m._id.toString(),
+      from: m.from,
+      fromName: names[m.from] || 'Desconocido',
+      text: m.text,
+      at: m.createdAt
+    }))
+  };
+}
+
+async function getConversationsForPlayer(playerId) {
+  const convs = await Conversation.find({ participants: playerId }).sort({ updatedAt: -1 }).limit(100);
+  const ids = convs.map(c => c._id.toString());
+  const unread = await getUnreadMap(ids, playerId);
+  const out = [];
+  for (const c of convs) {
+    const s = await serializeConversation(c, playerId);
+    s.unread = unread.get(c._id.toString()) || 0;
+    out.push(s);
+  }
+  return out;
+}
+
+async function getConversationMessages(conversationId, since) {
+  const q = { conversation: conversationId };
+  if (since) q.createdAt = { $gt: new Date(since) };
+  const messages = await Message.find(q).sort({ createdAt: 1 }).limit(200);
+  const names = {};
+  for (const m of messages) {
+    if (names[m.from] === undefined) {
+      const p = await Player.findById(m.from);
+      names[m.from] = p ? p.name : 'Desconocido';
+    }
+  }
+  return messages.map(m => ({
+    id: m._id.toString(),
+    from: m.from,
+    fromName: names[m.from] || 'Desconocido',
+    text: m.text,
+    at: m.createdAt
+  }));
+}
+
+async function sendMessage(conversationId, fromId, text) {
+  if (!text || !text.trim()) return null;
+  const conv = await Conversation.findById(conversationId);
+  if (!conv) return null;
+  if (!conv.participants.some(p => p.toString() === fromId)) return null;
+  const msg = await Message.create({ conversation: conversationId, from: fromId, text: text.trim() });
+  conv.lastMessage = { text: text.trim(), from: fromId, at: new Date() };
+  await conv.save();
+  const p = await Player.findById(fromId);
+  return {
+    id: msg._id.toString(),
+    from: fromId,
+    fromName: p ? p.name : 'Desconocido',
+    text: msg.text,
+    at: msg.createdAt
+  };
+}
+
+async function markConversationRead(conversationId, playerId) {
+  const conv = await Conversation.findById(conversationId);
+  if (!conv) return false;
+  if (!conv.participants.some(p => p.toString() === playerId)) return false;
+  await Message.updateMany(
+    { conversation: conversationId, from: { $ne: playerId }, readBy: { $ne: playerId } },
+    { $addToSet: { readBy: playerId } }
+  );
+  return true;
+}
+
+async function getUnreadChatCount(playerId) {
+  const convs = await Conversation.find({ participants: playerId }).select('_id').lean();
+  const ids = convs.map(c => c._id.toString());
+  const unread = await getUnreadMap(ids, playerId);
+  let total = 0;
+  for (const n of unread.values()) total += n;
+  return total;
+}
+
+// --- PUSH ---
+async function savePushSubscription(playerId, subscription) {
+  if (!subscription || !subscription.endpoint || !subscription.keys) return null;
+  const id = 'ps_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  await PushSubscription.deleteMany({ endpoint: subscription.endpoint });
+  const created = await PushSubscription.create({
+    _id: id,
+    player: playerId,
+    endpoint: subscription.endpoint,
+    keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth }
+  });
+  return created.toObject();
+}
+
+async function removePushSubscription(endpoint) {
+  if (!endpoint) return null;
+  const res = await PushSubscription.deleteMany({ endpoint });
+  return res.deletedCount > 0;
+}
+
+async function getPushSubscriptions(playerId) {
+  const subs = await PushSubscription.find({ player: playerId }).lean();
+  return subs.map(s => ({ endpoint: s.endpoint, keys: s.keys }));
+}
+
 // --- ADMIN ---
 async function getAllPlayersFull() {
   const players = await Player.find().sort({ name: 1 }).lean();
@@ -277,6 +438,8 @@ module.exports = {
   toggleAvailability, addRejection, checkAndUnsuspend, deletePlayer, resetPlayer,
   deleteInvitation, createInvitation, getInvitationByShortId, getInvitation, getInvitationWithFrom, getPendingInvitationsForPlayer, getSentInvitations,
   respondInvitation, getInvitationStats, getRules, updateCategory,
+  getOrCreateConversation, getConversationsForPlayer, getConversationMessages, sendMessage, markConversationRead, getUnreadChatCount,
+  savePushSubscription, removePushSubscription, getPushSubscriptions,
   getAllPlayersFull, adminSuspendPlayer, adminUnsuspendPlayer, adminAddWarning,
   updateRule, getAdminStats
 };
