@@ -122,7 +122,7 @@ app.use(helmet.referrerPolicy({ policy: 'no-referrer' }));
 
 const limiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 120,
+  max: process.env.TEST_MODE === '1' ? 100000 : 120,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes, intentá de nuevo más tarde' },
@@ -131,7 +131,7 @@ app.use(limiter);
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 30,
+  max: process.env.TEST_MODE === '1' ? 100000 : 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes, intentá de nuevo más tarde' },
@@ -143,6 +143,8 @@ app.use('/api/matches', apiLimiter);
 app.use('/api/app', apiLimiter);
 app.use('/api/ladder', apiLimiter);
 app.use('/api/map', apiLimiter);
+app.use('/api/leagues', apiLimiter);
+app.use('/api/seeking', apiLimiter);
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -838,6 +840,168 @@ app.get('/api/map/:playerId', async (req, res) => {
     const player = await db.getPlayer(req.params.playerId);
     if (!player) return res.status(404).json({ error: 'Jugador no encontrado' });
     res.json(await db.getMapView(req.params.playerId));
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// ─── FASE 3: BOX LEAGUE ────────────────────────────────
+
+app.post('/api/leagues', async (req, res) => {
+  try {
+    const { name, createdBy, playerIds } = req.body;
+    if (!name || !createdBy) return res.status(400).json({ error: 'name y createdBy requeridos' });
+    const result = await db.createLeague(name, createdBy, playerIds || []);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.status(201).json(result.league);
+  } catch (err) {
+    console.error('POST /api/leagues error:', err.message);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/api/leagues/player/:playerId', async (req, res) => {
+  try {
+    res.json(await db.getLeaguesForPlayer(req.params.playerId));
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/api/leagues/:id', async (req, res) => {
+  try {
+    const viewer = req.query.playerId || null;
+    const league = await db.getLeagueById(req.params.id, viewer);
+    if (!league) return res.status(404).json({ error: 'Box no encontrada' });
+    res.json(league);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.post('/api/leagues/:id/players', async (req, res) => {
+  try {
+    const { playerId } = req.body;
+    if (!playerId) return res.status(400).json({ error: 'playerId requerido' });
+    const result = await db.addLeaguePlayer(req.params.id, playerId);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json(result.league);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.post('/api/leagues/:id/matches/:matchId/result', async (req, res) => {
+  try {
+    const { winner, score, by } = req.body;
+    if (!winner || !score || !by) return res.status(400).json({ error: 'winner, score y by son requeridos' });
+    const result = await db.registerLeagueResult(req.params.id, req.params.matchId, winner, score, by);
+    if (result.error) return res.status(400).json({ error: result.error });
+    const lg = result.league;
+    const m = lg.matches.find(x => x.id === req.params.matchId);
+    if (m) {
+      const opponentId = m.a === by ? m.b : m.a;
+      const iWon = (winner === 'a' && m.a === by) || (winner === 'b' && m.b === by);
+      sendPushToPlayer(opponentId, iWon ? '📋 Resultado cargado en la box' : '🏆 Ganaste en la box!', m.score || '', '/');
+    }
+    res.status(201).json(lg);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.post('/api/leagues/:id/finish', async (req, res) => {
+  try {
+    const result = await db.finishLeague(req.params.id);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json(result.league);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.delete('/api/leagues/:id', async (req, res) => {
+  try {
+    const { by } = req.body;
+    if (!by) return res.status(400).json({ error: 'by requerido' });
+    const result = await db.deleteLeague(req.params.id, by);
+    if (result.error) return res.status(403).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// ─── FASE 3: BUSCO 4TO ─────────────────────────────────
+
+app.post('/api/seeking', async (req, res) => {
+  try {
+    const { playerId, date, time, court, note, level } = req.body;
+    if (!playerId) return res.status(400).json({ error: 'playerId requerido' });
+    if (!date && !time && !court && !note) return res.status(400).json({ error: 'Completá al menos un dato' });
+    const result = await db.createSeekingPost(playerId, { date, time, court, note, level });
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.status(201).json(result.post);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/api/seeking/:playerId', async (req, res) => {
+  try {
+    res.json(await db.getSeekingPosts(req.params.playerId));
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.post('/api/seeking/:id/join', async (req, res) => {
+  try {
+    const { playerId } = req.body;
+    if (!playerId) return res.status(400).json({ error: 'playerId requerido' });
+    const result = await db.joinSeekingPost(req.params.id, playerId);
+    if (result.error) return res.status(400).json({ error: result.error });
+    const joiner = await db.getPlayer(playerId);
+    const detail = [result.post.date ? `📅 ${result.post.date}` : '', result.post.time ? `🕒 ${result.post.time}` : '', result.post.court ? `📍 ${result.post.court}` : ''].filter(Boolean).join(' ');
+    sendPushToPlayer(result.post.playerId, `${joiner ? joiner.name : 'Alguien'} se sumó a tu "Busco 4to" 🎾`, detail || 'Mirá la pizarra en la app', '/');
+    res.status(201).json(result.post);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.put('/api/seeking/:id/close', async (req, res) => {
+  try {
+    const { playerId } = req.body;
+    if (!playerId) return res.status(400).json({ error: 'playerId requerido' });
+    const result = await db.closeSeekingPost(req.params.id, playerId);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.delete('/api/seeking/:id', async (req, res) => {
+  try {
+    const { playerId } = req.body;
+    if (!playerId) return res.status(400).json({ error: 'playerId requerido' });
+    const result = await db.deleteSeekingPost(req.params.id, playerId);
+    if (result.error) return res.status(403).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// ─── FASE 3: PERFIL PÚBLICO (sin datos sensibles) ──────
+
+app.get('/api/players/:id/profile', async (req, res) => {
+  try {
+    const viewer = req.query.viewer || null;
+    const profile = await db.getPlayerProfile(req.params.id, viewer);
+    if (!profile) return res.status(404).json({ error: 'Jugador no encontrado' });
+    res.json(profile);
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
   }

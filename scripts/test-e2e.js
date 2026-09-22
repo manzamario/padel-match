@@ -2,6 +2,7 @@ process.env.PORT = '8091';
 process.env.ADMIN_PASSWORD = 'test-admin-pass';
 process.env.VAPID_PUBLIC_KEY = '';
 process.env.VAPID_PRIVATE_KEY = '';
+process.env.TEST_MODE = '1';
 
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const { spawn } = require('child_process');
@@ -216,6 +217,62 @@ async function main() {
   ok('ubicación se puede desactivar', locOff.status === 200 && locOff.body.location && locOff.body.location.shared === false);
   const map2 = (await jfetch(`/api/map/${B}`)).body;
   ok('A ya no aparece en el mapa', map2 && !map2.players.some(p => p.id === A));
+
+  console.log('▶ FASE 3: BOX LEAGUE');
+  const lg0 = await jfetch('/api/leagues', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '', createdBy: A, playerIds: [B] }) });
+  ok('box sin nombre → 400', lg0.status === 400);
+  const lg1 = await jfetch('/api/leagues', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Box Test', createdBy: A, playerIds: [B, C] }) });
+  ok('box creada con round-robin', lg1.status === 201 && lg1.body.players.length === 3 && lg1.body.totalMatches === 3, lg1.body && { n: lg1.body.totalMatches, status: lg1.status });
+  const lgId = lg1.body.id;
+  ok('standings con 3 filas rank 1..3', lg1.body.standings.length === 3 && lg1.body.standings.every((r, i) => r.rank === i + 1));
+  const myM = lg1.body.matches.find(m => m.a === A || m.b === A);
+  ok('A tiene al menos un partido en la box', !!myM);
+  const lgR = await jfetch(`/api/leagues/${lgId}/matches/${myM.id}/result`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ winner: myM.a === A ? 'a' : 'b', score: '6-3 6-4', by: A }) });
+  ok('resultado de box cargado', lgR.status === 201 && lgR.body.completedMatches >= 1, { status: lgR.status, body: lgR.body && lgR.body.error });
+  const top = lgR.body.standings[0];
+  ok('líder de la box tiene 3 pts', top && top.points === 3, top);
+  const lgR2 = await jfetch(`/api/leagues/${lgId}/matches/${myM.id}/result`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ winner: 'a', score: '6-0', by: A }) });
+  ok('resultado duplicado de box → 400', lgR2.status === 400);
+  const lgAdd = await jfetch(`/api/leagues/${lgId}/players`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: D }) });
+  ok('no se puede agregar jugador con resultados → 400', lgAdd.status === 400);
+  const lgFin = await jfetch(`/api/leagues/${lgId}/finish`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+  ok('box finalizada', lgFin.status === 200 && lgFin.body.status === 'finished');
+  const lgResAfter = await jfetch(`/api/leagues/${lgId}/matches/${myM.id}/result`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ winner: 'a', score: '6-1', by: A }) });
+  ok('no se carga resultado en box finalizada', lgResAfter.status === 400);
+  const myLgs = (await jfetch(`/api/leagues/player/${A}`)).body;
+  ok('lista de boxes de A', Array.isArray(myLgs) && myLgs.some(l => l.id === lgId));
+
+  console.log('▶ FASE 3: BUSCO 4TO');
+  const sk0 = await jfetch('/api/seeking', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: A }) });
+  ok('publicación vacía → 400', sk0.status === 400);
+  const sk1 = await jfetch('/api/seeking', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: A, date: '25/09/2026', time: '20:00', court: 'Blindes', note: 'nivel 5' }) });
+  ok('publicación creada', sk1.status === 201 && !!sk1.body.id && sk1.body.status === 'open');
+  const skId = sk1.body.id;
+  const skListB = (await jfetch(`/api/seeking/${B}`)).body;
+  ok('B ve la publicación de A', Array.isArray(skListB) && skListB.some(p => p.id === skId));
+  const skListA = (await jfetch(`/api/seeking/${A}`)).body;
+  ok('A no ve su propia publicación en la lista', !skListA.some(p => p.id === skId));
+  const skJoinSelf = await jfetch(`/api/seeking/${skId}/join`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: A }) });
+  ok('dueño no puede sumarse → 400', skJoinSelf.status === 400);
+  const skJoin = await jfetch(`/api/seeking/${skId}/join`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: B }) });
+  ok('B se suma a la publicación', skJoin.status === 201 && skJoin.body.joinedBy.includes(B), skJoin.body);
+  const skJoin2 = await jfetch(`/api/seeking/${skId}/join`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: B }) });
+  ok('doble sumatoria → 400', skJoin2.status === 400);
+  const skClose = await jfetch(`/api/seeking/${skId}/close`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: B }) });
+  ok('cerrar de ajeno → 400', skClose.status === 400);
+  const skClose2 = await jfetch(`/api/seeking/${skId}/close`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: A }) });
+  ok('dueño cierra publicación', skClose2.status === 200);
+  const skListB2 = (await jfetch(`/api/seeking/${B}`)).body;
+  ok('publicación cerrada ya no aparece', !skListB2.some(p => p.id === skId));
+
+  console.log('▶ FASE 3: PERFIL PÚBLICO');
+  const prof = (await jfetch(`/api/players/${A}/profile`)).body;
+  ok('perfil existe con player/stats/recentMatches/leagues', prof && prof.player && prof.stats && Array.isArray(prof.recentMatches) && Array.isArray(prof.leagues));
+  ok('perfil no expone password ni phone', prof && prof.player && prof.player.password === undefined && prof.player.phone === undefined);
+  ok('perfil incluye rating/reputation/achievements', typeof prof.player.rating === 'number' && typeof prof.player.reputation === 'number' && Array.isArray(prof.player.achievements));
+  ok('perfil lista la box de A', prof.leagues.some(l => l.id === lgId));
+  const prof404 = await jfetch('/api/players/no-existe/profile');
+  ok('perfil inexistente → 404', prof404.status === 404);
 
   await finish();
 }

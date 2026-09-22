@@ -5,6 +5,8 @@ const Conversation = require('./models/Conversation');
 const Message = require('./models/Message');
 const PushSubscription = require('./models/PushSubscription');
 const Match = require('./models/Match');
+const League = require('./models/League');
+const SeekingPost = require('./models/SeekingPost');
 
 const DEFAULT_RULES = [
   '1. DISPONIBILIDAD OBLIGATORIA: Todo jugador debe mantener actualizado su estado de disponibilidad (disponible/no disponible) en todo momento. Aparecer como "disponible" implica compromiso a responder invitaciones en tiempo y forma.',
@@ -897,6 +899,319 @@ async function getAdminStats() {
   return { totalPlayers, activePlayers, suspendedPlayers, pendingInvitations, totalInvitations, warnedPlayers };
 }
 
+// --- FASE 3: BOX LEAGUE ---
+function makeId(prefix) {
+  return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+function generateRoundRobin(playerIds) {
+  const ids = [...new Set(playerIds.map(String))];
+  if (ids.length < 2) return [];
+  const players = ids.slice();
+  if (players.length % 2 === 1) players.push(null);
+  const n = players.length;
+  const arr = players.slice();
+  const matches = [];
+  let round = 1;
+  for (let r = 0; r < n - 1; r++) {
+    for (let i = 0; i < n / 2; i++) {
+      const a = arr[i];
+      const b = arr[n - 1 - i];
+      if (a && b) {
+        matches.push({ _id: makeId('lm'), a, b, round, winner: null, score: '', status: 'pending', playedAt: null });
+      }
+    }
+    const fixed = arr[0];
+    const rest = arr.slice(1);
+    rest.unshift(rest.pop());
+    arr.splice(0, arr.length, fixed, ...rest);
+    round++;
+  }
+  return matches;
+}
+
+function buildLeagueStandings(league, playersById) {
+  const rows = new Map();
+  for (const pid of league.players) {
+    rows.set(String(pid), { playerId: String(pid), played: 0, wins: 0, losses: 0, points: 0 });
+  }
+  for (const m of league.matches || []) {
+    if (m.status !== 'completed' || !m.winner) continue;
+    const winnerId = m.winner === 'a' ? m.a : m.b;
+    const loserId = m.winner === 'a' ? m.b : m.a;
+    const w = rows.get(String(winnerId));
+    const l = rows.get(String(loserId));
+    if (w) { w.played++; w.wins++; w.points += 3; }
+    if (l) { l.played++; l.losses++; }
+  }
+  const out = [...rows.values()].map(r => {
+    const p = playersById.get(r.playerId);
+    return {
+      ...r,
+      name: p ? p.name : '?',
+      category: p ? p.category : '',
+      rating: p && typeof p.rating === 'number' ? p.rating : ELO_BASE
+    };
+  });
+  out.sort((a, b) => b.points - a.points || b.wins - a.wins || a.losses - b.losses || String(a.name).localeCompare(String(b.name)));
+  out.forEach((r, i) => { r.rank = i + 1; });
+  return out;
+}
+
+async function serializeLeague(league, viewerId) {
+  const players = await Player.find({ _id: { $in: league.players } }).lean();
+  const byId = new Map(players.map(p => [p._id.toString(), p]));
+  const nameOf = (id) => { const p = byId.get(String(id)); return p ? p.name : '?'; };
+  const standings = buildLeagueStandings(league, byId);
+  const myRow = viewerId ? standings.find(s => s.playerId === String(viewerId)) : null;
+  return {
+    id: league._id,
+    name: league.name,
+    status: league.status,
+    createdBy: league.createdBy,
+    players: league.players.map(id => {
+      const p = byId.get(String(id));
+      return { id: String(id), name: p ? p.name : '?', category: p ? p.category : '' };
+    }),
+    matches: (league.matches || []).map(m => ({
+      id: m._id,
+      a: m.a,
+      aName: nameOf(m.a),
+      b: m.b,
+      bName: nameOf(m.b),
+      round: m.round,
+      winner: m.winner,
+      score: m.score,
+      status: m.status,
+      playedAt: m.playedAt
+    })),
+    standings,
+    myRank: myRow ? myRow.rank : null,
+    totalMatches: (league.matches || []).length,
+    completedMatches: (league.matches || []).filter(m => m.status === 'completed').length,
+    createdAt: league.createdAt
+  };
+}
+
+async function createLeague(name, createdBy, playerIds) {
+  const displayName = (name || '').toString().trim().slice(0, 80);
+  if (!displayName) return { error: 'La liga necesita un nombre' };
+  const members = [];
+  const pending = new Set([String(createdBy), ...(Array.isArray(playerIds) ? playerIds : []).map(x => String(x))]);
+  for (const pid of pending) {
+    const exists = await Player.findById(pid);
+    if (exists) members.push(pid);
+  }
+  if (members.length < 2) return { error: 'La box necesita al menos 2 jugadores' };
+  if (members.length > 12) return { error: 'Máximo 12 jugadores por box' };
+  const matches = generateRoundRobin(members);
+  const league = await League.create({
+    _id: makeId('lg'),
+    name: displayName,
+    status: 'active',
+    createdBy: String(createdBy),
+    players: members,
+    matches
+  });
+  return { league: await serializeLeague(league.toObject ? league.toObject() : league, createdBy) };
+}
+
+async function getLeagueById(id, viewerId) {
+  const league = await League.findById(id);
+  if (!league) return null;
+  return serializeLeague(league, viewerId);
+}
+
+async function getLeaguesForPlayer(playerId) {
+  const leagues = await League.find({ players: String(playerId) }).sort({ createdAt: -1 }).limit(50);
+  const out = [];
+  for (const lg of leagues) out.push(await serializeLeague(lg, playerId));
+  return out;
+}
+
+async function addLeaguePlayer(leagueId, playerId) {
+  const league = await League.findById(leagueId);
+  if (!league) return { error: 'Box no encontrada' };
+  if (league.status !== 'active') return { error: 'La box ya finalizó' };
+  if (league.matches.some(m => m.status === 'completed')) return { error: 'Ya hay resultados: no se pueden agregar jugadores' };
+  if (league.players.map(String).includes(String(playerId))) return { error: 'Ya está en la box' };
+  if (league.players.length >= 12) return { error: 'Máximo 12 jugadores' };
+  const p = await Player.findById(playerId);
+  if (!p) return { error: 'Jugador no encontrado' };
+  league.players.push(String(playerId));
+  league.matches = generateRoundRobin(league.players);
+  await league.save();
+  return { league: await serializeLeague(league, playerId) };
+}
+
+async function registerLeagueResult(leagueId, matchId, winnerSide, score, byPlayerId) {
+  const league = await League.findById(leagueId);
+  if (!league) return { error: 'Box no encontrada' };
+  if (league.status !== 'active') return { error: 'La box ya finalizó' };
+  const m = (league.matches || []).find(x => x._id === matchId);
+  if (!m) return { error: 'Partido no encontrado' };
+  if (m.status === 'completed') return { error: 'Este partido ya tiene resultado' };
+  const pid = String(byPlayerId);
+  if (m.a !== pid && m.b !== pid) return { error: 'No sos parte de este partido' };
+  const s = (score || '').toString().trim();
+  if (!s) return { error: 'El marcador no puede estar vacío' };
+  if (s.length > 60) return { error: 'Marcador demasiado largo (máx. 60)' };
+  const winner = winnerSide === 'a' ? 'a' : (winnerSide === 'b' ? 'b' : null);
+  if (!winner) return { error: 'Falta indicar quién ganó' };
+  m.winner = winner;
+  m.score = s;
+  m.status = 'completed';
+  m.playedAt = new Date();
+  await league.save();
+  try {
+    const winId = winner === 'a' ? m.a : m.b;
+    const loseId = winner === 'a' ? m.b : m.a;
+    await applyMatchRatingAndPoints([winId], [loseId]);
+  } catch (e) {
+    console.error('league rating error:', e.message);
+  }
+  return { league: await serializeLeague(league, byPlayerId) };
+}
+
+async function finishLeague(leagueId) {
+  const league = await League.findById(leagueId);
+  if (!league) return { error: 'Box no encontrada' };
+  league.status = 'finished';
+  league.finishedAt = new Date();
+  await league.save();
+  return { league: await serializeLeague(league, null) };
+}
+
+async function deleteLeague(leagueId, byPlayerId) {
+  const league = await League.findById(leagueId);
+  if (!league) return { error: 'Box no encontrada' };
+  if (String(league.createdBy) !== String(byPlayerId)) return { error: 'Solo el creador puede eliminar la box' };
+  await League.findByIdAndDelete(leagueId);
+  return { ok: true };
+}
+
+// --- FASE 3: BUSCO 4TO ---
+async function createSeekingPost(playerId, { date, time, court, note, level }) {
+  const p = await Player.findById(playerId);
+  if (!p) return { error: 'Jugador no encontrado' };
+  const post = await SeekingPost.create({
+    _id: makeId('sp'),
+    playerId: String(playerId),
+    date: (date || '').toString().slice(0, 20),
+    time: (time || '').toString().slice(0, 10),
+    court: (court || '').toString().slice(0, 60),
+    note: (note || '').toString().trim().slice(0, 200),
+    level: (level || '').toString().slice(0, 5),
+    status: 'open',
+    joinedBy: []
+  });
+  return { post: await serializeSeeking(post) };
+}
+
+async function serializeSeeking(post) {
+  const owner = await Player.findById(post.playerId).lean();
+  const joiners = await Player.find({ _id: { $in: post.joinedBy || [] } }).lean();
+  return {
+    id: post._id,
+    playerId: post.playerId,
+    playerName: owner ? owner.name : '?',
+    playerCategory: owner ? owner.category : '',
+    date: post.date || '',
+    time: post.time || '',
+    court: post.court || '',
+    note: post.note || '',
+    level: post.level || '',
+    status: post.status,
+    joinedBy: (post.joinedBy || []).map(String),
+    joinerNames: joiners.map(j => j.name),
+    createdAt: post.createdAt
+  };
+}
+
+async function getSeekingPosts(viewerId) {
+  const posts = await SeekingPost.find({ status: 'open' }).sort({ createdAt: -1 }).limit(100);
+  const out = [];
+  for (const p of posts) {
+    if (String(p.playerId) === String(viewerId)) continue;
+    out.push(await serializeSeeking(p));
+  }
+  return out;
+}
+
+async function getSeekingPostById(id) {
+  const p = await SeekingPost.findById(id);
+  return p ? serializeSeeking(p) : null;
+}
+
+async function joinSeekingPost(postId, playerId) {
+  const post = await SeekingPost.findById(postId);
+  if (!post) return { error: 'Publicación no encontrada' };
+  if (post.status !== 'open') return { error: 'Esta publicación ya está cerrada' };
+  if (String(post.playerId) === String(playerId)) return { error: 'No podés sumarte a tu propia publicación' };
+  if ((post.joinedBy || []).map(String).includes(String(playerId))) return { error: 'Ya te sumaste' };
+  if ((post.joinedBy || []).length >= 6) return { error: 'Ya hay demasiados interesados' };
+  post.joinedBy.push(String(playerId));
+  await post.save();
+  return { post: await serializeSeeking(post) };
+}
+
+async function closeSeekingPost(postId, byPlayerId) {
+  const post = await SeekingPost.findById(postId);
+  if (!post) return { error: 'Publicación no encontrada' };
+  if (String(post.playerId) !== String(byPlayerId)) return { error: 'Solo el dueño puede cerrar' };
+  post.status = 'closed';
+  await post.save();
+  return { ok: true };
+}
+
+async function deleteSeekingPost(postId, byPlayerId) {
+  const post = await SeekingPost.findById(postId);
+  if (!post) return { error: 'Publicación no encontrada' };
+  if (String(post.playerId) !== String(byPlayerId) ) return { error: 'Solo el dueño puede eliminar' };
+  await SeekingPost.findByIdAndDelete(postId);
+  return { ok: true };
+}
+
+async function getPlayerProfile(id, viewerId) {
+  const p = await Player.findById(id);
+  if (!p || !p.isComplete) return null;
+  const [stats, ladder, leagues, matches, invStats] = await Promise.all([
+    getPlayerStats(id),
+    getLadder(),
+    getLeaguesForPlayer(id),
+    getMatchesForPlayer(id),
+    buildInvitationStatsMap()
+  ]);
+  const lad = ladder.find(r => r.id === String(id));
+  const inv = invStats[String(id)] || {};
+  const reputation = lad ? lad.reputation : computeReputation({ ...emptyStats(), ...inv }, p.warnings || 0, p.rejections || 0);
+  const achievements = lad ? lad.achievements : computeAchievements(stats, reputation);
+  const recent = matches.slice(0, 20);
+  return {
+    player: {
+      id: p._id.toString(),
+      name: p.name,
+      category: p.category,
+      available: !!p.available,
+      suspended: !!p.suspended,
+      rating: typeof p.rating === 'number' ? p.rating : ELO_BASE,
+      points: p.points || 0,
+      reputation,
+      achievements,
+      rank: lad ? lad.rank : null,
+      ladderSize: ladder.length,
+      isMe: viewerId ? String(viewerId) === String(id) : false
+    },
+    stats: {
+      played: stats.played, wins: stats.wins, losses: stats.losses, winRate: stats.winRate,
+      streak: stats.streak, acceptRate: stats.acceptRate, responseRate: stats.responseRate,
+      received: stats.received, pendingMatches: stats.pendingMatches
+    },
+    recentMatches: recent,
+    leagues: leagues.map(l => ({ id: l.id, name: l.name, status: l.status, myRank: l.myRank, players: l.players.length }))
+  };
+}
+
 module.exports = {
   ensureRules,
   verifyPlayerPassword,
@@ -909,6 +1224,9 @@ module.exports = {
   createMatchFromInvite, getMatchById, getMatchesForPlayer, registerMatchResult, getPlayerStats,
   setPlayerSlots, computeCompat, buildAppSummary,
   getLadder, getAchievementCatalog, setPlayerLocation, getMapView, computeReputation, computeAchievements,
+  createLeague, getLeagueById, getLeaguesForPlayer, addLeaguePlayer, registerLeagueResult, finishLeague, deleteLeague,
+  createSeekingPost, getSeekingPosts, getSeekingPostById, joinSeekingPost, closeSeekingPost, deleteSeekingPost,
+  getPlayerProfile,
   savePushSubscription, removePushSubscription, getPushSubscriptions,
   getAllPlayersFull, adminSuspendPlayer, adminUnsuspendPlayer, adminAddWarning,
   updateRule, getAdminStats

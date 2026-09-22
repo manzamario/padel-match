@@ -150,11 +150,14 @@
     .tabs {
       display: flex; gap: 4px; margin-bottom: 14px;
       background: var(--card); border-radius: 14px; padding: 4px; border: 1px solid var(--border);
+      overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none;
     }
+    .tabs::-webkit-scrollbar { display: none; }
     .tab {
-      flex: 1; padding: 10px 8px; text-align: center; border-radius: 10px;
-      font-size: 0.8rem; font-weight: 500; cursor: pointer; border: none;
+      flex: 0 0 auto; padding: 10px 12px; text-align: center; border-radius: 10px;
+      font-size: 0.78rem; font-weight: 500; cursor: pointer; border: none;
       background: transparent; color: var(--muted); transition: 0.2s; font-family: inherit;
+      white-space: nowrap;
     }
     .tab.active { background: rgba(37,211,102,0.1); color: var(--green); font-weight: 600; }
     .tab-content { display: none; }
@@ -453,6 +456,8 @@
             <button class="tab" data-tab="sentTab">Enviadas</button>
             <button class="tab" data-tab="matchesTab">Partidos</button>
             <button class="tab" data-tab="ladderTab">Ladder</button>
+            <button class="tab" data-tab="boxTab">Box</button>
+            <button class="tab" data-tab="seekingTab">Busco 4to</button>
             <button class="tab" data-tab="mapTab">Mapa</button>
             <button class="tab" data-tab="rulesTab">Reglas</button>
           </div>
@@ -467,6 +472,12 @@
           </div>
           <div id="ladderTab" class="tab-content">
             <div id="ladderList"><div class="empty-state">Cargando ladder...</div></div>
+          </div>
+          <div id="boxTab" class="tab-content">
+            <div id="boxPanel"><div class="empty-state">Cargando boxes...</div></div>
+          </div>
+          <div id="seekingTab" class="tab-content">
+            <div id="seekingPanel"><div class="empty-state">Cargando pizarra...</div></div>
           </div>
           <div id="mapTab" class="tab-content">
             <div id="mapPanel"><div class="empty-state">Cargando mapa...</div></div>
@@ -702,6 +713,88 @@
     </div>
   </div>
 
+  <!-- PERFIL MODAL -->
+  <div id="profileModal" class="modal-overlay hidden">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="profileModalTitle">Perfil</div>
+      <div class="modal-sub" id="profileModalSub"></div>
+      <div id="profileModalBody"><div class="empty-state">Cargando...</div></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="profileShareBtn">🔗 Compartir</button>
+        <button class="btn btn-primary" id="profileCloseBtn">Cerrar</button>
+      </div>
+      <div id="profileModalMsg" class="msg" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- CREAR BOX MODAL -->
+  <div id="boxModal" class="modal-overlay hidden">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">🏆 Crear Box League</div>
+      <div class="modal-sub">Ligueta todos contra todos. Al terminar cada partido cargás el resultado y se arma la tabla.</div>
+      <div class="modal-field">
+        <label>Nombre de la box</label>
+        <input type="text" id="boxName" placeholder="Ej: Box jueves Blindes" maxlength="80" />
+      </div>
+      <div class="modal-field">
+        <label>Jugadores (mínimo 2, contándote a vos)</label>
+        <div id="boxMembersList"><div class="empty-state">Cargando jugadores...</div></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="boxCancelBtn">Cancelar</button>
+        <button class="btn btn-primary" id="boxCreateBtn">Crear box</button>
+      </div>
+      <div id="boxModalMsg" class="msg" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- BUSCO 4TO MODAL -->
+  <div id="seekModal" class="modal-overlay hidden">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">🙋 Busco 4to</div>
+      <div class="modal-sub">Publicá que necesitás un jugador más y otros se pueden sumar.</div>
+      <div class="modal-field">
+        <label>Fecha</label>
+        <input type="date" id="seekDate" />
+      </div>
+      <div class="modal-field">
+        <label>Horario</label>
+        <input type="time" id="seekTime" />
+      </div>
+      <div class="modal-field">
+        <label>Cancha / Lugar</label>
+        <input type="text" id="seekCourt" placeholder="Ej: Blindes" maxlength="60" />
+      </div>
+      <div class="modal-field">
+        <label>Nota (opcional)</label>
+        <input type="text" id="seekNote" placeholder="Ej: nivel 5-6, zaguero" maxlength="200" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="seekCancelBtn">Cancelar</button>
+        <button class="btn btn-primary" id="seekPublishBtn">Publicar</button>
+      </div>
+      <div id="seekModalMsg" class="msg" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- PERFIL PÚBLICO (?p=id) -->
+  <div id="publicProfileScreen" class="hidden">
+    <div class="top-bar">
+      <div class="container top-bar-inner" style="padding:0;">
+        <h1>Padel <span>Match</span></h1>
+        <div class="top-actions">
+          <button id="publicProfileBackBtn" class="btn btn-sm btn-ghost">Entrar a la app</button>
+        </div>
+      </div>
+    </div>
+    <div class="container" style="padding-bottom:40px;">
+      <div class="profile-card" id="publicProfileCard"><div class="empty-state">Cargando perfil...</div></div>
+    </div>
+  </div>
+
   <!-- CHAT OVERLAY -->
   <div id="chatScreen" class="hidden">
     <div id="chatListView">
@@ -731,7 +824,7 @@
 
   <script>
     const API = window.location.origin;
-    const APP_VERSION = '2.5.0';
+    const APP_VERSION = '2.6.0';
     let myPlayerId = localStorage.getItem('padel_myId');
     const CATS = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
 
@@ -788,8 +881,14 @@
 
       if (myPlayerId) {
         const r = await fetch(`${API}/api/players/${myPlayerId}`).then(r => r.ok).catch(() => false);
-        if (r) { showApp(); return; }
+        if (r) {
+          const shareId = new URLSearchParams(window.location.search).get('p');
+          if (shareId && shareId !== myPlayerId) { showPublicProfile(shareId); return; }
+          showApp(); return;
+        }
       }
+      const shareOnly = new URLSearchParams(window.location.search).get('p');
+      if (shareOnly) { showPublicProfile(shareOnly); return; }
       showRegisterScreen();
     }
 
@@ -823,6 +922,7 @@
       document.getElementById('appScreen').classList.add('hidden');
       document.getElementById('adminLogin').classList.add('hidden');
       document.getElementById('adminScreen').classList.add('hidden');
+      document.getElementById('publicProfileScreen').classList.add('hidden');
     }
 
     // REGISTER
@@ -923,7 +1023,11 @@
         renderMiniProfile(s.me, s.stats || null, s.gamification || null);
         renderLadder(s.ladder || [], s.gamification || null);
         updateChatBadge(s.convos || []);
-        if (document.getElementById('mapTab').classList.contains('active')) loadMapPanel();
+        const activeTab = document.querySelector('.tab.active');
+        const activeId = activeTab ? activeTab.dataset.tab : '';
+        if (activeId === 'mapTab') loadMapPanel();
+        if (activeId === 'boxTab') loadBoxPanel();
+        if (activeId === 'seekingTab') loadSeekingPanel();
       } catch {}
     }
 
@@ -984,10 +1088,11 @@
         return `<div class="player-item" style="cursor:pointer;" onclick="toggleSelect('${p.id}')">
           <div style="display:flex;align-items:center;padding-right:8px;"><input type="checkbox" class="player-check" data-id="${p.id}" ${checked} onclick="event.stopPropagation();toggleSelect('${p.id}')" style="width:18px;height:18px;accent-color:var(--green);" /></div>
           <div class="player-info">
-            <div class="player-row"><span class="status-dot online"></span><span class="p-name">${esc(p.name)}</span>${compatHtml}</div>
-            <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'Sin categoría'}</span><span class="p-phone">${esc(p.phone)}</span></div>
+            <div class="player-row"><span class="status-dot online"></span><span class="p-name" onclick="event.stopPropagation();openProfileModal('${p.id}')" style="text-decoration:underline;text-decoration-color:transparent;" onmouseover="this.style.textDecorationColor='var(--green)'" onmouseout="this.style.textDecorationColor='transparent'">${esc(p.name)}</span>${compatHtml}</div>
+            <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'Sin categoría'}</span><span class="p-phone">${esc(p.phone)}</span>${typeof p.rating === 'number' ? `<span class="p-phone">${Math.round(p.rating)} Elo</span>` : ''}</div>
           </div>
           <div class="p-actions" style="flex-shrink:0;">
+            <button class="btn btn-sm btn-ghost" style="width:auto;padding:8px 10px;" onclick="event.stopPropagation();openProfileModal('${p.id}')" title="Ver perfil">👤</button>
             <button class="btn btn-sm btn-ghost" style="width:auto;padding:8px 10px;" onclick="event.stopPropagation();openChatWith('${p.id}','${esc(p.name)}')" title="Enviar mensaje">💬</button>
           </div>
         </div>`;
@@ -1536,6 +1641,7 @@ Padel Match - buscá tu dupla ideal`;
         <div style="display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);padding-top:10px;margin-top:10px;flex-wrap:wrap;">
           <button class="btn btn-sm btn-ghost" onclick="openSlotsModal()">📅 Disponibilidad</button>
           <button class="btn btn-sm btn-ghost" onclick="shareMyLocation()">📍 Mi ubicación</button>
+          <button class="btn btn-sm btn-ghost" onclick="openProfileModal(myPlayerId)">👤 Mi perfil</button>
           <button class="btn btn-sm btn-ghost" onclick="changeCategory()" style="margin-left:auto;">Cambiar categoría</button>
         </div>
       `;
@@ -1645,6 +1751,385 @@ Padel Match - buscá tu dupla ideal`;
       }
     }
 
+    async function showPublicProfile(playerId) {
+      hideAll();
+      document.getElementById('publicProfileScreen').classList.remove('hidden');
+      const card = document.getElementById('publicProfileCard');
+      card.innerHTML = '<div class="empty-state">Cargando perfil...</div>';
+      try {
+        const prof = await (await fetch(`${API}/api/players/${playerId}/profile`)).json();
+        if (!prof || !prof.player) { card.innerHTML = '<div class="empty-state">Perfil no encontrado</div>'; return; }
+        card.innerHTML = renderProfileHtml(prof, true);
+      } catch {
+        card.innerHTML = '<div class="empty-state">Error al cargar el perfil</div>';
+      }
+    }
+
+    function renderProfileHtml(prof, isPublicView) {
+      const p = prof.player;
+      const s = prof.stats || {};
+      const cats = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
+      const winRate = (s.winRate === null || s.winRate === undefined) ? '--' : s.winRate + '%';
+      const streakTxt = (s.streak > 0 ? '+' : '') + (s.streak || 0);
+      const badges = (p.achievements || []).map(id => {
+        const def = (window._achDefs || []).find(a => a.id === id);
+        return def ? `<span class="slot-chip" style="font-size:0.65rem;">${def.icon} ${esc(def.name)}</span>` : '';
+      }).join('');
+      const status = p.suspended ? 'Suspendido' : (p.available ? 'Disponible' : 'No disponible');
+      const dot = p.suspended ? 'suspended' : (p.available ? 'online' : 'offline');
+      const matchRows = (prof.recentMatches || []).slice(0, 8).map(m => {
+        const vs = `${(m.teamA || []).map(t => esc(t.name)).join(' + ')} vs ${(m.teamB || []).map(t => esc(t.name)).join(' + ')}`;
+        const res = m.status === 'completed'
+          ? `<span style="color:${m.iWon ? 'var(--green)' : 'var(--red)'};font-weight:600;">${m.iWon ? 'V' : 'D'} ${esc(m.score || '')}</span>`
+          : '<span style="color:var(--amber);">⏳ pendiente</span>';
+        return `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.78rem;"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;">${vs}</span>${res}</div>`;
+      }).join('') || '<div class="empty-state" style="padding:16px;">Sin partidos recientes</div>';
+      const leagueRows = (prof.leagues || []).map(l =>
+        `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.78rem;"><span>🏆 ${esc(l.name)}</span><span style="color:var(--muted);">${l.status === 'finished' ? 'Finalizada' : 'Activa'}${l.myRank ? ` · #${l.myRank}` : ''}</span></div>`
+      ).join('');
+      return `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <span class="status-dot ${dot}" style="width:10px;height:10px;"></span>
+          <div>
+            <div style="font-weight:700;font-size:1.1rem;">${esc(p.name)}${p.isMe ? ' <span class="p-tag">VOS</span>' : ''}</div>
+            <div style="font-size:0.78rem;color:var(--muted);">${cats[p.category] || p.category} · ${status}${p.rank ? ` · Ladder #${p.rank}` : ''}</div>
+          </div>
+        </div>
+        <div class="stats-row">
+          <div class="stat hl"><b>${Math.round(p.rating || 1500)}</b>Elo</div>
+          <div class="stat"><b>${p.points || 0}</b>Puntos</div>
+          <div class="stat ${p.reputation >= 80 ? 'hl' : (p.reputation < 50 ? 'lo' : '')}"><b>${p.reputation != null ? p.reputation : '—'}</b>Fair play</div>
+          <div class="stat"><b>${s.played || 0}</b>Partidos</div>
+          <div class="stat hl"><b>${s.wins || 0}</b>Victorias</div>
+          <div class="stat lo"><b>${s.losses || 0}</b>Derrotas</div>
+          <div class="stat"><b>${winRate}</b>Rendimiento</div>
+          <div class="stat"><b>${streakTxt}</b>Racha</div>
+        </div>
+        ${badges ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">${badges}</div>` : ''}
+        ${!isPublicView && p.id === myPlayerId ? `<div style="margin-top:12px;"><button class="btn btn-sm btn-ghost" onclick="shareProfile('${p.id}')">🔗 Compartir mi perfil</button></div>` : ''}
+        <div style="font-size:0.85rem;font-weight:600;margin-top:16px;margin-bottom:4px;">Últimos partidos</div>
+        ${matchRows}
+        ${leagueRows ? `<div style="font-size:0.85rem;font-weight:600;margin-top:16px;margin-bottom:4px;">Boxes</div>${leagueRows}` : ''}
+      `;
+    }
+
+    let profileShareId = null;
+    async function openProfileModal(playerId) {
+      if (!playerId) return;
+      profileShareId = playerId;
+      document.getElementById('profileModalTitle').textContent = 'Perfil';
+      document.getElementById('profileModalSub').textContent = '';
+      document.getElementById('profileModalBody').innerHTML = '<div class="empty-state">Cargando...</div>';
+      document.getElementById('profileModal').classList.remove('hidden');
+      try {
+        const prof = await (await fetch(`${API}/api/players/${playerId}/profile${myPlayerId ? `?viewer=${myPlayerId}` : ''}`)).json();
+        if (!prof || !prof.player) {
+          document.getElementById('profileModalBody').innerHTML = '<div class="empty-state">Perfil no encontrado</div>';
+          return;
+        }
+        document.getElementById('profileModalTitle').textContent = prof.player.name;
+        document.getElementById('profileModalBody').innerHTML = renderProfileHtml(prof, false);
+      } catch {
+        document.getElementById('profileModalBody').innerHTML = '<div class="empty-state">Error al cargar</div>';
+      }
+    }
+
+    async function shareProfile(id) {
+      const url = `${window.location.origin}/?p=${id}`;
+      try {
+        if (navigator.share) {
+          await navigator.share({ title: 'Mi perfil en Padel Match', url });
+        } else {
+          await navigator.clipboard.writeText(url);
+          alert('Enlace copiado: ' + url);
+        }
+      } catch {
+        prompt('Copiá el enlace de tu perfil:', url);
+      }
+    }
+
+    // ─── BOX LEAGUE ───
+    let boxMembers = new Set();
+    let currentBoxId = null;
+
+    async function loadBoxPanel() {
+      const panel = document.getElementById('boxPanel');
+      if (!myPlayerId) return;
+      panel.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+          <span style="font-size:0.85rem;font-weight:600;">Box Leagues</span>
+          <button class="btn btn-sm btn-primary" id="openBoxCreateBtn">+ Nueva box</button>
+        </div>
+        <div id="boxList"><div class="empty-state">Cargando...</div></div>
+        <div id="boxDetail" style="margin-top:12px;"></div>
+      `;
+      document.getElementById('openBoxCreateBtn').addEventListener('click', openBoxModal);
+      const list = document.getElementById('boxList');
+      try {
+        const leagues = await (await fetch(`${API}/api/leagues/player/${myPlayerId}`)).json();
+        if (!Array.isArray(leagues) || !leagues.length) {
+          list.innerHTML = '<div class="empty-state">No estás en ninguna box todavía. Creá una y jugá la ligueta con tu grupo.</div>';
+          return;
+        }
+        list.innerHTML = leagues.map(lg => `
+          <div class="player-item" style="cursor:pointer;${currentBoxId === lg.id ? 'border-color:var(--green);' : ''}" onclick="openBoxDetail('${lg.id}')">
+            <div class="player-info">
+              <div class="player-row"><span class="p-name">🏆 ${esc(lg.name)}</span>
+                <span class="p-tag" style="${lg.status === 'finished' ? 'background:rgba(255,255,255,0.08);color:var(--muted);' : ''}">${lg.status === 'finished' ? 'Finalizada' : 'Activa'}</span>
+              </div>
+              <div class="player-row" style="gap:6px;flex-wrap:wrap;">
+                <span class="p-phone">${lg.players.length} jugadores</span>
+                <span class="p-phone">${lg.completedMatches}/${lg.totalMatches} partidos</span>
+                ${lg.myRank ? `<span class="p-phone">Vos: #${lg.myRank}</span>` : ''}
+              </div>
+            </div>
+          </div>
+        `).join('');
+        if (currentBoxId) openBoxDetail(currentBoxId);
+      } catch {
+        list.innerHTML = '<div class="empty-state">Error al cargar boxes</div>';
+      }
+    }
+
+    async function openBoxDetail(id) {
+      currentBoxId = id;
+      const box = document.getElementById('boxDetail');
+      if (!box) { loadBoxPanel(); return; }
+      box.innerHTML = '<div class="empty-state">Cargando box...</div>';
+      try {
+        const lg = await (await fetch(`${API}/api/leagues/${id}?playerId=${myPlayerId}`)).json();
+        if (lg.error) { box.innerHTML = `<div class="empty-state">${esc(lg.error)}</div>`; return; }
+        const medal = (r) => r === 1 ? '🥇' : (r === 2 ? '🥈' : (r === 3 ? '🥉' : r));
+        const standings = lg.standings.map(r => `
+          <div class="player-item" style="${r.playerId === myPlayerId ? 'border:1px solid var(--green);background:rgba(37,211,102,0.05);' : ''}">
+            <div class="player-info">
+              <div class="player-row"><span class="p-name" style="min-width:26px;">${medal(r.rank)}</span><span class="p-name">${esc(r.name)}</span></div>
+              <div class="player-row" style="gap:6px;"><span class="p-tag">${CATS[r.category] || r.category}</span><span class="p-phone">${r.points} pts · ${r.wins}V-${r.losses}D</span></div>
+            </div>
+          </div>`).join('');
+        const myMatches = lg.matches.filter(m => m.a === myPlayerId || m.b === myPlayerId);
+        const matchHtml = myMatches.map(m => {
+          const isA = m.a === myPlayerId;
+          const oppName = isA ? m.bName : m.aName;
+          const side = isA ? 'a' : 'b';
+          let action = '';
+          if (m.status === 'pending') {
+            action = `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();openLeagueResult('${lg.id}','${m.id}','${esc(oppName)}','${side}')">📝 Resultado</button>`;
+          } else {
+            const won = m.winner === side;
+            action = `<span style="font-weight:600;font-size:0.78rem;color:${won ? 'var(--green)' : 'var(--red)'};">${won ? 'V' : 'D'} ${esc(m.score)}</span>`;
+          }
+          return `<div class="player-item">
+            <div class="player-info">
+              <div class="player-row"><span class="p-name">vs ${esc(oppName)}</span></div>
+              <div class="player-row"><span class="p-phone">Ronda ${m.round} · ${m.status === 'completed' ? 'jugado' : 'pendiente'}</span></div>
+            </div>
+            <div class="p-actions">${action}</div>
+          </div>`;
+        }).join('') || '<div class="empty-state">Sin partidos asignados</div>';
+        box.innerHTML = `
+          <div class="profile-card" style="margin-top:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+              <div>
+                <div style="font-weight:700;">🏆 ${esc(lg.name)}</div>
+                <div style="font-size:0.72rem;color:var(--muted);">${lg.completedMatches}/${lg.totalMatches} partidos · ${lg.status === 'finished' ? 'Finalizada' : 'Activa'}${lg.myRank ? ` · Vos #${lg.myRank}` : ''}</div>
+              </div>
+              <div style="display:flex;gap:6px;">
+                ${lg.status === 'active' ? `<button class="btn btn-sm btn-ghost" onclick="finishBox('${lg.id}')">Finalizar</button>` : ''}
+                <button class="btn btn-sm btn-ghost" onclick="closeBoxDetail()">✕</button>
+              </div>
+            </div>
+            <div style="font-size:0.85rem;font-weight:600;margin-bottom:6px;">Tabla</div>
+            <div class="player-list" style="margin-bottom:12px;">${standings}</div>
+            <div style="font-size:0.85rem;font-weight:600;margin-bottom:6px;">Tus partidos</div>
+            <div class="player-list">${matchHtml}</div>
+          </div>
+        `;
+      } catch {
+        box.innerHTML = '<div class="empty-state">Error al cargar la box</div>';
+      }
+    }
+
+    function closeBoxDetail() {
+      currentBoxId = null;
+      const box = document.getElementById('boxDetail');
+      if (box) box.innerHTML = '';
+    }
+
+    function openBoxModal() {
+      boxMembers = new Set([myPlayerId]);
+      document.getElementById('boxName').value = '';
+      document.getElementById('boxModalMsg').className = 'msg';
+      renderBoxMembers();
+      document.getElementById('boxModal').classList.remove('hidden');
+    }
+
+    function renderBoxMembers() {
+      const list = document.getElementById('boxMembersList');
+      const players = (window._allPlayersData || []).filter(p => p.name && !p.suspended);
+      if (!players.length) { list.innerHTML = '<div class="empty-state">No hay otros jugadores</div>'; return; }
+      list.innerHTML = players.map(p => `
+        <label class="member-pick ${boxMembers.has(p.id) ? 'picked' : ''}" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:10px;margin-bottom:4px;background:rgba(255,255,255,0.03);cursor:pointer;">
+          <input type="checkbox" ${boxMembers.has(p.id) ? 'checked' : ''} ${p.id === myPlayerId ? 'disabled checked' : ''} onchange="toggleBoxMember('${p.id}', this.checked)" style="accent-color:var(--green);" />
+          <span style="flex:1;font-size:0.85rem;font-weight:600;">${esc(p.name)}${p.id === myPlayerId ? ' (vos)' : ''}</span>
+          <span class="p-tag">${CATS[p.category] || ''}</span>
+        </label>`).join('');
+    }
+
+    function toggleBoxMember(id, on) {
+      if (id === myPlayerId) return;
+      if (on) boxMembers.add(id); else boxMembers.delete(id);
+      renderBoxMembers();
+    }
+
+    async function finishBox(id) {
+      if (!confirm('¿Finalizar la box? No se podrán cargar más resultados.')) return;
+      try {
+        const r = await fetch(`${API}/api/leagues/${id}/finish`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        if (r.ok) openBoxDetail(id);
+        else { const d = await r.json(); alert(d.error || 'Error'); }
+      } catch { alert('Error de conexión'); }
+    }
+
+    let leagueResultCtx = null;
+    function openLeagueResult(leagueId, matchId, oppName, side) {
+      leagueResultCtx = { leagueId, matchId, side };
+      const score = prompt(`Marcador vs ${oppName} (ej: 6-4 6-3).\nEscribí el resultado y después indicá quién ganó.`);
+      if (score === null) return;
+      if (!score.trim()) { alert('Marcador vacío'); return; }
+      const won = confirm(`¿Ganaste contra ${oppName}?\nOK = gané / Cancelar = perdí`);
+      saveLeagueResult(score.trim(), won ? side : (side === 'a' ? 'b' : 'a'));
+    }
+
+    async function saveLeagueResult(score, winner) {
+      if (!leagueResultCtx) return;
+      try {
+        const r = await fetch(`${API}/api/leagues/${leagueResultCtx.leagueId}/matches/${leagueResultCtx.matchId}/result`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ winner, score, by: myPlayerId })
+        });
+        const d = await r.json();
+        if (!r.ok) { alert(d.error || 'Error'); return; }
+        openBoxDetail(leagueResultCtx.leagueId);
+      } catch { alert('Error de conexión'); }
+      leagueResultCtx = null;
+    }
+
+    document.getElementById('boxCancelBtn').addEventListener('click', () => document.getElementById('boxModal').classList.add('hidden'));
+    document.getElementById('boxModal').addEventListener('click', function(e) { if (e.target === this) this.classList.add('hidden'); });
+    document.getElementById('boxCreateBtn').addEventListener('click', async () => {
+      const name = document.getElementById('boxName').value.trim();
+      const msg = document.getElementById('boxModalMsg');
+      if (!name) { msg.className = 'msg show error'; msg.textContent = 'Poné un nombre a la box'; return; }
+      if (boxMembers.size < 2) { msg.className = 'msg show error'; msg.textContent = 'Elegí al menos 1 jugador más (mínimo 2 en total)'; return; }
+      const btn = document.getElementById('boxCreateBtn');
+      btn.disabled = true; btn.textContent = 'Creando...';
+      try {
+        const r = await fetch(`${API}/api/leagues`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, createdBy: myPlayerId, playerIds: Array.from(boxMembers) })
+        });
+        const d = await r.json();
+        if (!r.ok) { msg.className = 'msg show error'; msg.textContent = d.error || 'Error'; btn.disabled = false; btn.textContent = 'Crear box'; return; }
+        btn.disabled = false; btn.textContent = 'Crear box';
+        document.getElementById('boxModal').classList.add('hidden');
+        currentBoxId = d.id;
+        loadBoxPanel();
+      } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; btn.disabled = false; btn.textContent = 'Crear box'; }
+    });
+
+    // ─── BUSCO 4TO ───
+    async function loadSeekingPanel() {
+      const panel = document.getElementById('seekingPanel');
+      if (!myPlayerId) return;
+      panel.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+          <span style="font-size:0.85rem;font-weight:600;">Pizarra "Busco 4to"</span>
+          <button class="btn btn-sm btn-primary" id="openSeekBtn">+ Publicar</button>
+        </div>
+        <div id="seekList"><div class="empty-state">Cargando...</div></div>
+      `;
+      document.getElementById('openSeekBtn').addEventListener('click', openSeekModal);
+      const list = document.getElementById('seekList');
+      try {
+        const posts = await (await fetch(`${API}/api/seeking/${myPlayerId}`)).json();
+        if (!Array.isArray(posts) || !posts.length) {
+          list.innerHTML = '<div class="empty-state">No hay publicaciones abiertas. Si te falta un jugador, publicá acá.</div>';
+          return;
+        }
+        list.innerHTML = posts.map(p => {
+          const when = [p.date ? `📅 ${fmtDate(p.date)}` : '', p.time ? `🕒 ${p.time}` : '', p.court ? `📍 ${esc(p.court)}` : ''].filter(Boolean).join(' · ');
+          const iJoined = (p.joinedBy || []).includes(myPlayerId);
+          return `<div class="inv-item">
+            <div class="inv-from">${esc(p.playerName)} <span class="p-tag">${CATS[p.playerCategory] || ''}</span></div>
+            ${when ? `<div class="inv-meta" style="color:var(--amber);">${when}</div>` : ''}
+            ${p.note ? `<div class="inv-meta">${esc(p.note)}</div>` : ''}
+            ${(p.joinerNames || []).length ? `<div class="inv-meta" style="color:var(--green);">Interesados: ${p.joinerNames.map(esc).join(', ')}</div>` : ''}
+            <div class="inv-actions">
+              ${iJoined
+                ? '<span style="color:var(--green);font-weight:600;font-size:0.8rem;">✔ Te sumaste</span>'
+                : `<button class="btn btn-sm btn-success" onclick="joinSeek('${p.id}')">Me sumo</button>`}
+              <button class="btn btn-sm btn-ghost" onclick="openChatWith('${p.playerId}','${esc(p.playerName)}')">💬 Chat</button>
+            </div>
+          </div>`;
+        }).join('');
+      } catch {
+        list.innerHTML = '<div class="empty-state">Error al cargar la pizarra</div>';
+      }
+    }
+
+    function openSeekModal() {
+      document.getElementById('seekDate').value = '';
+      document.getElementById('seekTime').value = '';
+      document.getElementById('seekCourt').value = '';
+      document.getElementById('seekNote').value = '';
+      document.getElementById('seekModalMsg').className = 'msg';
+      document.getElementById('seekModal').classList.remove('hidden');
+    }
+
+    document.getElementById('seekCancelBtn').addEventListener('click', () => document.getElementById('seekModal').classList.add('hidden'));
+    document.getElementById('seekModal').addEventListener('click', function(e) { if (e.target === this) this.classList.add('hidden'); });
+    document.getElementById('seekPublishBtn').addEventListener('click', async () => {
+      const date = document.getElementById('seekDate').value;
+      const time = document.getElementById('seekTime').value;
+      const court = document.getElementById('seekCourt').value.trim();
+      const note = document.getElementById('seekNote').value.trim();
+      const msg = document.getElementById('seekModalMsg');
+      if (!date && !time && !court && !note) { msg.className = 'msg show error'; msg.textContent = 'Completá al menos un dato'; return; }
+      const btn = document.getElementById('seekPublishBtn');
+      btn.disabled = true; btn.textContent = 'Publicando...';
+      try {
+        const r = await fetch(`${API}/api/seeking`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: myPlayerId, date, time, court, note })
+        });
+        const d = await r.json();
+        if (!r.ok) { msg.className = 'msg show error'; msg.textContent = d.error || 'Error'; btn.disabled = false; btn.textContent = 'Publicar'; return; }
+        btn.disabled = false; btn.textContent = 'Publicar';
+        document.getElementById('seekModal').classList.add('hidden');
+        loadSeekingPanel();
+      } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; btn.disabled = false; btn.textContent = 'Publicar'; }
+    });
+
+    async function joinSeek(id) {
+      try {
+        const r = await fetch(`${API}/api/seeking/${id}/join`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: myPlayerId })
+        });
+        const d = await r.json();
+        if (!r.ok) { alert(d.error || 'Error'); return; }
+        loadSeekingPanel();
+      } catch { alert('Error de conexión'); }
+    }
+
+    document.getElementById('profileCloseBtn').addEventListener('click', () => document.getElementById('profileModal').classList.add('hidden'));
+    document.getElementById('profileModal').addEventListener('click', function(e) { if (e.target === this) this.classList.add('hidden'); });
+    document.getElementById('profileShareBtn').addEventListener('click', () => { if (profileShareId) shareProfile(profileShareId); });
+    document.getElementById('publicProfileBackBtn').addEventListener('click', () => {
+      window.location.href = window.location.origin;
+    });
+
     async function changeCategory() {
       const cats = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
       const opts = Object.entries(cats).map(([k,v]) => `<option value="${k}">${v}</option>`).join('');
@@ -1670,6 +2155,8 @@ Padel Match - buscá tu dupla ideal`;
         el.classList.add('animate-in');
         if (t.dataset.tab === 'mapTab') loadMapPanel();
         if (t.dataset.tab === 'ladderTab') loadApp();
+        if (t.dataset.tab === 'boxTab') loadBoxPanel();
+        if (t.dataset.tab === 'seekingTab') loadSeekingPanel();
       });
     });
 
