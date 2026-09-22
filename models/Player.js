@@ -13,7 +13,15 @@ const playerSchema = new mongoose.Schema({
   suspended: { type: Boolean, default: false },
   suspendedUntil: { type: Date, default: null },
   warnings: { type: Number, default: 0 },
-  isAdmin: { type: Boolean, default: false }
+  isAdmin: { type: Boolean, default: false },
+  slots: {
+    type: [{
+      day: { type: Number, min: 0, max: 6 },
+      from: { type: String },
+      to: { type: String }
+    }],
+    default: []
+  }
 }, {
   timestamps: true,
   toObject: { virtuals: true },

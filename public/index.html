@@ -303,6 +303,47 @@
     .modal-field input::placeholder { color: rgba(255,255,255,0.15); }
     .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
     .modal-actions .btn { flex: 1; }
+
+    /* ─── PARTIDOS / STATS / COMPAT / DISPONIBILIDAD ─── */
+    .stats-row { display:flex; gap:10px; flex-wrap:wrap; font-size:0.72rem; color:var(--muted); border-top:1px solid var(--border); padding-top:10px; margin-top:10px; }
+    .stats-row .stat { background: rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:10px; padding:6px 10px; text-align:center; min-width:58px; }
+    .stats-row .stat b { display:block; font-size:0.95rem; color:var(--text); font-weight:700; }
+    .stats-row .stat.hl b { color:var(--green); }
+    .stats-row .stat.lo b { color:var(--red); }
+
+    .match-item { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:8px; }
+    .match-head { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+    .match-title { font-weight:700; font-size:0.88rem; }
+    .match-meta { font-size:0.72rem; color:var(--muted); margin:4px 0 8px; }
+    .match-score { font-size:1.15rem; font-weight:800; letter-spacing:0.5px; }
+    .match-score.win { color:var(--green); }
+    .match-score.lose { color:var(--red); }
+    .match-vs { font-size:0.8rem; color:var(--muted); }
+
+    .compat {
+      display:inline-block; padding:2px 9px; border-radius:100px; font-size:0.68rem; font-weight:700;
+      border:1px solid var(--border); background:rgba(255,255,255,0.04); color:var(--text);
+    }
+    .compat.hi { border-color:rgba(37,211,102,0.35); background:rgba(37,211,102,0.1); color:var(--green); }
+    .compat.mid { border-color:rgba(255,165,2,0.35); background:rgba(255,165,2,0.1); color:var(--amber); }
+    .compat.lo { border-color:rgba(255,71,87,0.35); background:rgba(255,71,87,0.1); color:var(--red); }
+
+    .slot-chip {
+      display:inline-flex; align-items:center; gap:6px; background:rgba(37,211,102,0.07);
+      border:1px solid rgba(37,211,102,0.2); border-radius:100px; padding:4px 10px; font-size:0.7rem; color:var(--text);
+    }
+    .slot-chip .x { background:none; border:none; color:var(--red); cursor:pointer; font-size:0.8rem; line-height:1; padding:0; }
+    .slot-add-row { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+    .slot-add-row select, .slot-add-row input {
+      padding:9px 10px; border:1px solid var(--border); border-radius:10px; font-size:0.82rem;
+      font-family:inherit; background:rgba(255,255,255,0.04); color:var(--text); flex:1; min-width:90px;
+    }
+    .slot-add-row .day-sl { flex:1.2; }
+    .member-pick { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; margin-bottom:6px; cursor:pointer; background:rgba(255,255,255,0.02); }
+    .member-pick.picked { border-color:var(--green); background:rgba(37,211,102,0.07); }
+    .member-pick input { width:18px; height:18px; accent-color:var(--green); }
+
+    .last-time { font-size:0.62rem; color:var(--muted); }
   </style>
 </head>
 <body>
@@ -410,6 +451,7 @@
           <div class="tabs" style="margin-bottom:8px;">
             <button class="tab active" data-tab="invitationsTab">Recibidas <span id="invTabCount" class="hidden badge" style="margin-left:4px;font-size:0.6rem;padding:1px 6px;"></span></button>
             <button class="tab" data-tab="sentTab">Enviadas</button>
+            <button class="tab" data-tab="matchesTab">Partidos</button>
             <button class="tab" data-tab="rulesTab">Reglas</button>
           </div>
           <div id="invitationsTab" class="tab-content active">
@@ -417,6 +459,9 @@
           </div>
           <div id="sentTab" class="tab-content">
             <div id="sentInvitationsList"><div class="empty-state">Sin invitaciones enviadas</div></div>
+          </div>
+          <div id="matchesTab" class="tab-content">
+            <div id="matchesList"><div class="empty-state">Sin partidos todavía</div></div>
           </div>
           <div id="rulesTab" class="tab-content">
             <div class="player-list" id="rulesList"></div>
@@ -572,11 +617,89 @@
     </div>
   </div>
 
+  <!-- RESULT MODAL -->
+  <div id="resultModal" class="modal-overlay hidden">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="resultModalTitle">Cargar resultado</div>
+      <div class="modal-sub" id="resultModalSub">¿Quién ganó y con qué marcador?</div>
+      <div class="modal-field">
+        <label>Marcador</label>
+        <input type="text" id="resultScore" placeholder="Ej: 6-4 6-3" />
+        <div class="input-hint">Ej: 6-4 6-3 (sets) o 2-0 (games)</div>
+      </div>
+      <div class="modal-field">
+        <label>Ganador</label>
+        <select id="resultWinner"><option value="">Seleccioná el equipo ganador</option></select>
+      </div>
+      <div class="modal-field">
+        <label>Cancha</label>
+        <select id="resultCourt">
+          <option value="">—</option>
+          <option value="Blindes">Blindes</option>
+          <option value="Santi Espíndola">Santi Espíndola</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="resultCancelBtn">Cancelar</button>
+        <button class="btn btn-primary" id="resultSaveBtn">Guardar resultado</button>
+      </div>
+      <div id="resultModalMsg" class="msg" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- AVAILABILITY MODAL -->
+  <div id="slotsModal" class="modal-overlay hidden">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">📅 Mi disponibilidad semanal</div>
+      <div class="modal-sub">Contá en qué días y horarios solés estar libre para jugar. Esto se usa para calcular tu compatibilidad con otros jugadores.</div>
+      <div id="slotsList" style="display:flex;flex-direction:column;gap:6px;"><div class="empty-state">Sin horarios cargados</div></div>
+      <div class="slot-add-row">
+        <select id="slotDay" class="day-sl">
+          <option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option>
+          <option value="4">Jueves</option><option value="5">Viernes</option><option value="6">Sábado</option><option value="0">Domingo</option>
+        </select>
+        <input type="time" id="slotFrom" value="19:00" />
+        <input type="time" id="slotTo" value="22:00" />
+        <button class="btn btn-sm btn-primary" id="slotAddBtn" style="flex:0 0 auto;">Agregar</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="slotsCancelBtn">Cerrar</button>
+        <button class="btn btn-primary" id="slotsSaveBtn">Guardar</button>
+      </div>
+      <div id="slotsModalMsg" class="msg" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- GROUP MODAL -->
+  <div id="groupModal" class="modal-overlay hidden">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">👥 Crear grupo</div>
+      <div class="modal-sub">Arma un chat con un grupo de jugadores (ej: para coordinar un partido o un grupo de práctica).</div>
+      <div class="modal-field">
+        <label>Nombre del grupo</label>
+        <input type="text" id="groupName" placeholder="Ej: Partido jueves Blindes" maxlength="60" />
+      </div>
+      <div class="modal-field">
+        <label>Miembros (mínimo 2)</label>
+        <div id="groupMembersList"><div class="empty-state">Cargando jugadores...</div></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="groupCancelBtn">Cancelar</button>
+        <button class="btn btn-primary" id="groupCreateBtn">Crear grupo</button>
+      </div>
+      <div id="groupModalMsg" class="msg" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
   <!-- CHAT OVERLAY -->
   <div id="chatScreen" class="hidden">
     <div id="chatListView">
       <div class="chat-header">
         <h2>💬 <span style="color:var(--green);">Mensajes</span></h2>
+        <button class="chat-back" style="font-size:0.78rem;padding:8px 12px;border:1px solid var(--border);border-radius:10px;" onclick="openNewGroupModal()">👥 Crear grupo</button>
         <button class="chat-back" onclick="closeChatList()">✕</button>
       </div>
       <div id="chatList" class="player-list" style="padding:8px;">
@@ -600,7 +723,7 @@
 
   <script>
     const API = window.location.origin;
-    const APP_VERSION = '2.3.0';
+    const APP_VERSION = '2.4.0';
     let myPlayerId = localStorage.getItem('padel_myId');
     const CATS = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
 
@@ -775,23 +898,21 @@
     async function loadApp() {
       if (!myPlayerId) return;
       try {
-        const [me, players, pending, sent, rules, convos] = await Promise.all([
-          fetch(`${API}/api/players/${myPlayerId}`).then(r => r.json()),
-          fetch(`${API}/api/players`).then(r => r.json()),
-          fetch(`${API}/api/invitations/pending/${myPlayerId}`).then(r => r.json()),
-          fetch(`${API}/api/invitations/sent/${myPlayerId}`).then(r => r.json()),
-          fetch(`${API}/api/rules`).then(r => r.json()),
-          fetch(`${API}/api/conversations/${myPlayerId}`).then(r => r.json())
-        ]);
-        window._allPlayersData = players;
-        renderHeader(me, pending.length);
-        renderStatus(me);
-        renderPlayers(players, me);
-        renderInvitations(pending);
-        renderSentInvitations(sent);
-        renderRules(rules);
-        renderMiniProfile(me);
-        updateChatBadge(convos);
+        const s = await (await fetch(`${API}/api/app/summary/${myPlayerId}`)).json();
+        if (!s || !s.me) return;
+        window._allPlayersData = s.players;
+        window._matchesData = s.matches || [];
+        window._myStats = s.stats || null;
+        window._myMe = s.me || null;
+        renderHeader(s.me, (s.pending || []).length);
+        renderStatus(s.me);
+        renderPlayers(s.players || [], s.me);
+        renderInvitations(s.pending || []);
+        renderSentInvitations(s.sent || []);
+        renderRules(s.rules || []);
+        renderMatches(s.matches || []);
+        renderMiniProfile(s.me, s.stats || null);
+        updateChatBadge(s.convos || []);
       } catch {}
     }
 
@@ -819,7 +940,8 @@
     function renderStatus(p) {
       const card = document.getElementById('statusCard');
       if (p.suspended) {
-        card.innerHTML = `<span class="suspended-text">Suspendido hasta ${new Date(p.suspended_until).toLocaleDateString('es-AR')}</span>`;
+        const until = new Date(p.suspendedUntil || p.suspended_until);
+        card.innerHTML = `<span class="suspended-text">Suspendido hasta ${isNaN(until.getTime()) ? '…' : until.toLocaleDateString('es-AR')}</span>`;
         return;
       }
       const remaining = Math.max(0, 3 - p.rejections);
@@ -843,10 +965,15 @@
       if (!filtered.length) { container.innerHTML = '<div class="empty-state">No hay jugadores disponibles ahora</div>'; updateMultiBar(); return; }
       container.innerHTML = filtered.map(p => {
         const checked = selectedPlayers.has(p.id) ? 'checked' : '';
+        const compat = (p.compat && typeof p.compat.total === 'number') ? p.compat.total : null;
+        const compatCls = compat === null ? '' : (compat >= 80 ? 'hi' : (compat >= 60 ? 'mid' : 'lo'));
+        const compatHtml = compat === null
+          ? ''
+          : `<span class="compat ${compatCls}" title="Nivel: ${p.compat.cat}% · Confianza: ${p.compat.rel}%${p.compat.avail === null ? '' : (p.compat.avail ? ' · Horarios: compatibles' : ' · Horarios: distintos')}">🎯 ${compat}%</span>`;
         return `<div class="player-item" style="cursor:pointer;" onclick="toggleSelect('${p.id}')">
           <div style="display:flex;align-items:center;padding-right:8px;"><input type="checkbox" class="player-check" data-id="${p.id}" ${checked} onclick="event.stopPropagation();toggleSelect('${p.id}')" style="width:18px;height:18px;accent-color:var(--green);" /></div>
           <div class="player-info">
-            <div class="player-row"><span class="status-dot online"></span><span class="p-name">${esc(p.name)}</span></div>
+            <div class="player-row"><span class="status-dot online"></span><span class="p-name">${esc(p.name)}</span>${compatHtml}</div>
             <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'Sin categoría'}</span><span class="p-phone">${esc(p.phone)}</span></div>
           </div>
           <div class="p-actions" style="flex-shrink:0;">
@@ -1135,13 +1262,198 @@ Padel Match - buscá tu dupla ideal`;
         if (inv.status === 'accepted') state = '<span style="color:var(--green);font-weight:600;">✔ Aceptada</span>';
         else if (inv.status === 'rejected') state = '<span style="color:var(--red);font-weight:600;">✖ Rechazada</span>';
         else state = '<span style="color:var(--amber);font-weight:600;">⏳ Pendiente</span>';
+        const m = (window._matchesData || []).find(x => x.inviteId === inv.id && x.status === 'pending');
+        const resultBtn = m ? `<div style="margin-top:8px;"><button class="btn btn-sm btn-primary" onclick="openResultModal('${m.id}')">📝 Cargar resultado</button></div>` : '';
         return `<div class="inv-item">
           <div class="inv-from">${esc(inv.toName)}</div>
           <div class="inv-meta">${state} &middot; ${time}</div>
           ${when ? `<div class="inv-meta" style="color:var(--amber);">${when}</div>` : ''}
+          ${resultBtn}
         </div>`;
       }).join('');
     }
+
+    function renderMatches(matches) {
+      const container = document.getElementById('matchesList');
+      if (!matches || !matches.length) { container.innerHTML = '<div class="empty-state">Sin partidos todavía. Cuando aceptes o te acepten una invitación, se crea un partido acá para cargar el resultado.</div>'; return; }
+      container.innerHTML = matches.map(m => {
+        const teamNames = (team) => (team || []).map(t => esc(t.name)).join(' + ');
+        const vs = `${teamNames(m.teamA)} vs ${teamNames(m.teamB)}`;
+        const time = m.createdAt ? new Date(m.createdAt).toLocaleString('es-AR') : '';
+        const meta = [m.date ? `📅 ${fmtDate(m.date)}` : '', m.time ? `🕒 ${m.time}` : '', m.court ? `📍 ${esc(m.court)}` : '', time].filter(Boolean).join(' · ');
+        const score = m.status === 'completed'
+          ? `<span class="match-score ${m.iWon ? 'win' : 'lose'}">${esc(m.score || '')}${m.iWon ? ' 🏆' : ''}</span>`
+          : '';
+        const action = m.status === 'pending'
+          ? `<button class="btn btn-sm btn-primary" onclick="openResultModal('${m.id}')">📝 Cargar resultado</button>`
+          : `<span class="match-vs">${m.iWon ? 'Victoria' : 'Derrota'}</span>`;
+        return `<div class="match-item">
+          <div class="match-head"><span class="match-title">${vs}</span>${score}</div>
+          <div class="match-meta">${meta}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span class="match-vs">${m.status === 'pending' ? '⏳ Esperando resultado' : ''}</span>
+            ${action}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // ─── RESULT MODAL ───
+    let resultMatchId = null;
+    function openResultModal(matchId) {
+      const m = (window._matchesData || []).find(x => x.id === matchId);
+      if (!m) return;
+      resultMatchId = matchId;
+      document.getElementById('resultScore').value = m.score || '';
+      const sel = document.getElementById('resultWinner');
+      sel.innerHTML = '<option value="">Seleccioná el equipo ganador</option>' +
+        `<option value="A">Equipo A: ${m.teamA.map(t => esc(t.name)).join(' + ')}</option>` +
+        `<option value="B">Equipo B: ${m.teamB.map(t => esc(t.name)).join(' + ')}</option>`;
+      sel.value = m.winnerTeam || '';
+      const court = document.getElementById('resultCourt');
+      court.value = m.court || '';
+      document.getElementById('resultModalMsg').className = 'msg';
+      document.getElementById('resultModalMsg').textContent = '';
+      document.getElementById('resultModal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('resultScore').focus(), 350);
+    }
+    function closeResultModal() {
+      resultMatchId = null;
+      document.getElementById('resultModal').classList.add('hidden');
+    }
+    document.getElementById('resultCancelBtn').addEventListener('click', closeResultModal);
+    document.getElementById('resultModal').addEventListener('click', function(e) { if (e.target === this) closeResultModal(); });
+    document.getElementById('resultSaveBtn').addEventListener('click', async () => {
+      if (!resultMatchId) return;
+      const score = document.getElementById('resultScore').value.trim();
+      const winnerTeam = document.getElementById('resultWinner').value;
+      const court = document.getElementById('resultCourt').value;
+      const msg = document.getElementById('resultModalMsg');
+      if (!score) { msg.className = 'msg show error'; msg.textContent = 'Escribí el marcador (ej: 6-4 6-3)'; return; }
+      if (!winnerTeam) { msg.className = 'msg show error'; msg.textContent = 'Seleccioná quién ganó'; return; }
+      const btn = document.getElementById('resultSaveBtn');
+      btn.disabled = true; btn.textContent = 'Guardando...';
+      try {
+        const r = await fetch(`${API}/api/matches/${resultMatchId}/result`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ winnerTeam, score, by: myPlayerId, court })
+        });
+        const d = await r.json();
+        if (!r.ok) { msg.className = 'msg show error'; msg.textContent = d.error || 'Error'; btn.disabled = false; btn.textContent = 'Guardar resultado'; return; }
+        btn.disabled = false; btn.textContent = 'Guardar resultado';
+        closeResultModal();
+        loadApp();
+      } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; btn.disabled = false; btn.textContent = 'Guardar resultado'; }
+    });
+
+    // ─── AVAILABILITY MODAL ───
+    let mySlotsDraft = [];
+    const DAY_NAMES = { 0: 'Domingo', 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado' };
+    const DAY_SHORT = { 0: 'Dom', 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb' };
+    function openSlotsModal() {
+      mySlotsDraft = (window._myMe && window._myMe.slots) ? window._myMe.slots.slice() : [];
+      renderSlotsList();
+      document.getElementById('slotsModalMsg').className = 'msg';
+      document.getElementById('slotsModal').classList.remove('hidden');
+    }
+    function renderSlotsList() {
+      const box = document.getElementById('slotsList');
+      if (!mySlotsDraft.length) { box.innerHTML = '<div class="empty-state">Sin horarios cargados</div>'; return; }
+      box.innerHTML = mySlotsDraft.map((sl, i) => `
+        <div class="slot-chip"><b>${DAY_SHORT[sl.day] || '?'}</b> ${sl.from} - ${sl.to}
+          <button class="x" onclick="removeSlot(${i})" title="Quitar">✕</button>
+        </div>`).join('');
+    }
+    function removeSlot(i) { mySlotsDraft.splice(i, 1); renderSlotsList(); }
+    document.getElementById('slotAddBtn').addEventListener('click', () => {
+      const day = document.getElementById('slotDay').value;
+      const from = document.getElementById('slotFrom').value;
+      const to = document.getElementById('slotTo').value;
+      const msg = document.getElementById('slotsModalMsg');
+      if (!from || !to) { msg.className = 'msg show error'; msg.textContent = 'Completá ambos horarios'; return; }
+      if (from >= to) { msg.className = 'msg show error'; msg.textContent = 'La hora de inicio debe ser anterior a la de fin'; return; }
+      if (mySlotsDraft.some(s => String(s.day) === String(day) && s.from === from && s.to === to)) {
+        msg.className = 'msg show error'; msg.textContent = 'Ese horario ya está cargado'; return;
+      }
+      if (mySlotsDraft.length >= 30) { msg.className = 'msg show error'; msg.textContent = 'Máximo 30 horarios'; return; }
+      mySlotsDraft.push({ day: parseInt(day, 10), from, to });
+      msg.className = 'msg';
+      renderSlotsList();
+    });
+    document.getElementById('slotsCancelBtn').addEventListener('click', () => {
+      document.getElementById('slotsModal').classList.add('hidden');
+    });
+    document.getElementById('slotsModal').addEventListener('click', function(e) {
+      if (e.target === this) document.getElementById('slotsModal').classList.add('hidden');
+    });
+    document.getElementById('slotsSaveBtn').addEventListener('click', async () => {
+      const msg = document.getElementById('slotsModalMsg');
+      const btn = document.getElementById('slotsSaveBtn');
+      btn.disabled = true; btn.textContent = 'Guardando...';
+      try {
+        const r = await fetch(`${API}/api/players/${myPlayerId}/slots`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slots: mySlotsDraft })
+        });
+        const d = await r.json();
+        if (!r.ok) { msg.className = 'msg show error'; msg.textContent = d.error || 'Error'; btn.disabled = false; btn.textContent = 'Guardar'; return; }
+        btn.disabled = false; btn.textContent = 'Guardar';
+        document.getElementById('slotsModal').classList.add('hidden');
+        loadApp();
+      } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; btn.disabled = false; btn.textContent = 'Guardar'; }
+    });
+
+    // ─── GROUP MODAL ───
+    let groupMembers = new Set();
+    function openNewGroupModal() {
+      groupMembers = new Set();
+      document.getElementById('groupName').value = '';
+      document.getElementById('groupModalMsg').className = 'msg';
+      renderGroupMembers();
+      document.getElementById('groupModal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('groupName').focus(), 350);
+    }
+    function closeGroupModal() {
+      document.getElementById('groupModal').classList.add('hidden');
+    }
+    function renderGroupMembers() {
+      const list = document.getElementById('groupMembersList');
+      const players = (window._allPlayersData || []).filter(p => p.name && p.id !== myPlayerId && !p.suspended);
+      if (!players.length) { list.innerHTML = '<div class="empty-state">No hay otros jugadores cargados</div>'; return; }
+      list.innerHTML = players.map(p => `
+        <label class="member-pick ${groupMembers.has(p.id) ? 'picked' : ''}">
+          <input type="checkbox" ${groupMembers.has(p.id) ? 'checked' : ''} onchange="toggleGroupMember('${p.id}', this.checked)" />
+          <span style="flex:1;font-size:0.85rem;font-weight:600;">${esc(p.name)}</span>
+          <span class="p-tag">${CATS[p.category] || ''}</span>
+        </label>`).join('');
+    }
+    function toggleGroupMember(id, on) {
+      if (on) groupMembers.add(id); else groupMembers.delete(id);
+      renderGroupMembers();
+    }
+    document.getElementById('groupCancelBtn').addEventListener('click', closeGroupModal);
+    document.getElementById('groupModal').addEventListener('click', function(e) { if (e.target === this) closeGroupModal(); });
+    document.getElementById('groupCreateBtn').addEventListener('click', async () => {
+      const name = document.getElementById('groupName').value.trim();
+      const msg = document.getElementById('groupModalMsg');
+      if (!name) { msg.className = 'msg show error'; msg.textContent = 'Poné un nombre al grupo'; return; }
+      if (groupMembers.size < 2) { msg.className = 'msg show error'; msg.textContent = 'Elegí al menos 2 jugadores (mínimo)'; return; }
+      const btn = document.getElementById('groupCreateBtn');
+      btn.disabled = true; btn.textContent = 'Creando...';
+      try {
+        const r = await fetch(`${API}/api/conversations/groups`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ creatorId: myPlayerId, name, memberIds: Array.from(groupMembers) })
+        });
+        const d = await r.json();
+        if (!r.ok) { msg.className = 'msg show error'; msg.textContent = d.error || 'Error'; btn.disabled = false; btn.textContent = 'Crear grupo'; return; }
+        btn.disabled = false; btn.textContent = 'Crear grupo';
+        closeGroupModal();
+        // Open the new group chat
+        refreshChatBadge();
+        openChatFromConvo(d.id, name, true);
+      } catch { msg.className = 'msg show error'; msg.textContent = 'Error de conexión'; btn.disabled = false; btn.textContent = 'Crear grupo'; }
+    });
 
     async function acceptInv(id) {
       const data = window._invById && window._invById[id];
@@ -1163,10 +1475,20 @@ Padel Match - buscá tu dupla ideal`;
       document.getElementById('rulesList').innerHTML = rules.map(r => `<div class="rule-item">${esc(r.content)}</div>`).join('');
     }
 
-    function renderMiniProfile(p) {
+    function renderMiniProfile(p, stats) {
       const cats = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
       const status = p.suspended ? 'Suspendido' : (p.available ? 'Disponible' : 'No disponible');
       const dot = p.suspended ? 'suspended' : (p.available ? 'online' : 'offline');
+      const s = stats || {};
+      const winRate = (s.winRate === null || s.winRate === undefined) ? '--' : s.winRate + '%';
+      const streakTxt = (s.streak > 0 ? '+' : (s.streak < 0 ? '' : '')) + (s.streak || 0);
+      const streakCls = s.streak > 0 ? 'hl' : (s.streak < 0 ? 'lo' : '');
+      const pendingP = (s.pendingMatches || 0) > 0 ? `<span style="color:var(--amber);font-weight:600;">⏳ ${s.pendingMatches} resultado(s) pendiente(s)</span>` : '';
+      const mySlots = (p.slots || []);
+      const slotHtml = mySlots.length ? mySlots.map(sl => {
+        const dnames = {0:'Dom',1:'Lun',2:'Mar',3:'Mié',4:'Jue',5:'Vie',6:'Sáb'};
+        return `<span class="slot-chip" style="font-size:0.62rem;">${dnames[sl.day]||'?'} ${sl.from}-${sl.to}</span>`;
+      }).join('') : '<span style="color:var(--muted);">Sin horarios cargados. Cargalos para aparecer como compatible.</span>';
       document.getElementById('miniProfile').innerHTML = `
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
           <span class="status-dot ${dot}" style="width:10px;height:10px;"></span>
@@ -1175,9 +1497,18 @@ Padel Match - buscá tu dupla ideal`;
             <div style="font-size:0.75rem;color:var(--muted);">${cats[p.category]||'Sin categoría'} &middot; ${status}</div>
           </div>
         </div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.75rem;color:var(--muted);border-top:1px solid var(--border);padding-top:10px;">
-          <span>Rechazos: <strong style="color:${p.rejections >= 3 ? 'var(--red)' : 'var(--amber)'}">${p.rejections||0}/3</strong></span>
-          <span>Advertencias: <strong style="color:${p.warnings > 0 ? 'var(--red)' : 'var(--muted)'}">${p.warnings||0}</strong></span>
+        <div class="stats-row">
+          <div class="stat"><b>${s.played || 0}</b>Partidos</div>
+          <div class="stat hl"><b>${s.wins || 0}</b>Victorias</div>
+          <div class="stat lo"><b>${s.losses || 0}</b>Derrotas</div>
+          <div class="stat"><b>${winRate}</b>Rendimiento</div>
+          <div class="stat ${streakCls}"><b>${streakTxt}</b>Racha</div>
+        </div>
+        ${pendingP ? `<div style="margin-top:8px;font-size:0.75rem;">${pendingP}</div>` : ''}
+        <div style="font-size:0.72rem;color:var(--muted);margin-top:10px;">Mi disponibilidad habitual:</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">${slotHtml}</div>
+        <div style="display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);padding-top:10px;margin-top:10px;flex-wrap:wrap;">
+          <button class="btn btn-sm btn-ghost" onclick="openSlotsModal()">📅 Disponibilidad</button>
           <button class="btn btn-sm btn-ghost" onclick="changeCategory()" style="margin-left:auto;">Cambiar categoría</button>
         </div>
       `;
@@ -1193,7 +1524,7 @@ Padel Match - buscá tu dupla ideal`;
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ category: sel })
         });
-        if (r.ok) { document.getElementById('profileCat').textContent = cats[sel]; loadApp(); }
+        if (r.ok) { loadApp(); }
         else alert('Error al cambiar categoría');
       } catch { alert('Error de conexión'); }
     }
@@ -1447,6 +1778,7 @@ ${p.suspended
     // ═══════════════ CHAT 1 A 1 ═══════════════
     let chatConvId = null;
     let chatPeerName = '';
+    let chatConvIsGroup = false;
     let chatLastMsgAt = null;
     let chatPollTimer = null;
     let chatOpen = false;
@@ -1492,10 +1824,26 @@ ${p.suspended
       const list = window._convosData || [];
       const box = document.getElementById('chatList');
       if (!list.length) {
-        box.innerHTML = '<div class="empty-state">Sin conversaciones todavía.<br>Elegí un jugador disponible y tocá el botón 💬 para escribirle por mensaje.</div>';
+        box.innerHTML = '<div class="empty-state">Sin conversaciones todavía.<br>Elegí un jugador disponible y tocá el botón 💬 para escribirle por mensaje, o usá "Crear grupo" para coordinar con varios.</div>';
         return;
       }
       box.innerHTML = list.map(c => {
+        if (c.group) {
+          const gname = c.name || 'Grupo';
+          const glast = c.lastMessage
+            ? (c.lastMessage.from === myPlayerId ? 'Vos: ' : (c.lastMessage.fromName ? c.lastMessage.fromName + ': ' : '')) + esc(c.lastMessage.text)
+            : 'Grupo creado';
+          const gtime = c.updatedAt ? new Date(c.updatedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+          const gunread = c.unread > 0 ? `<span class="badge" style="font-size:0.6rem;padding:1px 6px;">${c.unread}</span>` : '';
+          return `<div class="convo-item" onclick="openChatFromConvo('${c.id}','${esc(gname)}',true)">
+            <div class="avatar" style="background:rgba(255,165,2,0.12);color:var(--amber);">👥</div>
+            <div class="convo-main">
+              <div class="convo-name">${esc(gname)} <span style="font-size:0.65rem;color:var(--muted);">(${c.members || 0})</span> ${gunread}</div>
+              <div class="convo-last">${glast}</div>
+            </div>
+            <div class="convo-right"><span class="convo-time">${gtime}</span></div>
+          </div>`;
+        }
         const name = c.peer && c.peer.name ? c.peer.name : 'Desconocido';
         const last = c.lastMessage
           ? (c.lastMessage.from === myPlayerId ? 'Vos: ' : '') + esc(c.lastMessage.text)
@@ -1503,7 +1851,7 @@ ${p.suspended
         const time = c.updatedAt ? new Date(c.updatedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
         const unread = c.unread > 0 ? `<span class="badge" style="font-size:0.6rem;padding:1px 6px;">${c.unread}</span>` : '';
         const ini = (name.trim().charAt(0) || '?');
-        return `<div class="convo-item" onclick="openChatFromConvo('${c.id}','${esc(name)}')">
+        return `<div class="convo-item" onclick="openChatFromConvo('${c.id}','${esc(name)}',false)">
           <div class="avatar">${esc(ini)}</div>
           <div class="convo-main">
             <div class="convo-name">${esc(name)} ${unread}</div>
@@ -1525,14 +1873,15 @@ ${p.suspended
       } catch { alert('Error de conexión'); }
     }
 
-    async function openChatFromConvo(convId, peerName) {
+    async function openChatFromConvo(convId, peerName, isGroup) {
       document.getElementById('chatListView').classList.add('hidden');
-      openChatRoom(convId, peerName);
+      openChatRoom(convId, peerName, !!isGroup);
     }
 
-    async function openChatRoom(convId, peerName) {
+    async function openChatRoom(convId, peerName, isGroup) {
       chatConvId = convId;
       chatPeerName = peerName;
+      chatConvIsGroup = !!isGroup;
       chatOpen = true;
       document.getElementById('chatRoomView').classList.remove('hidden');
       document.getElementById('chatRoomTitle').textContent = chatPeerName;
@@ -1561,7 +1910,8 @@ ${p.suspended
       for (const m of messages) {
         const mine = m.from === myPlayerId;
         const time = m.at ? new Date(m.at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
-        box.innerHTML += `<div class="bubble ${mine ? 'mine' : 'theirs'}">${esc(m.text)}<span class="b-time">${time}</span></div>`;
+        const sender = (!mine && chatConvIsGroup && m.fromName) ? `<div style="font-size:0.62rem;color:var(--green);font-weight:700;margin-bottom:2px;">${esc(m.fromName)}</div>` : '';
+        box.innerHTML += `<div class="bubble ${mine ? 'mine' : 'theirs'}">${sender}${esc(m.text)}<span class="b-time">${time}</span></div>`;
       }
       box.scrollTop = box.scrollHeight;
     }

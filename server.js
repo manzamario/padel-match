@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const webpush = require('web-push');
 const db = require('./database');
 const Player = require('./models/Player');
+const Invitation = require('./models/Invitation');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -111,6 +112,8 @@ const apiLimiter = rateLimit({
 app.use('/api/admin', apiLimiter);
 app.use('/api/invitations', apiLimiter);
 app.use('/api/push', apiLimiter);
+app.use('/api/matches', apiLimiter);
+app.use('/api/app', apiLimiter);
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -350,6 +353,7 @@ app.get('/api/invitations/:id/respond', async (req, res) => {
     if (!result) return res.status(500).send('<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#0a0a0f;color:#f0f0f5;"><h2>Error al procesar</h2></body></html>');
     const invite = await db.getInvitationWithFrom(req.params.id);
     if (invite) {
+      if (status === 'accepted') db.createMatchFromInvite(invite).catch(() => {});
       const toInfo = await db.getPlayer(inv.toPlayer.toString());
       const msgs = { accepted: 'aceptó tu invitación ✅', rejected: 'rechazó tu invitación ❌' };
       sendPushToPlayer(invite.fromPlayerId || inv.fromPlayer, `${toInfo ? toInfo.name : 'Un jugador'} ${msgs[status]}`, `${invite.date ? `📅 ${invite.date} ` : ''}${invite.court ? `📍 ${invite.court}` : ''}`.trim(), '/');
@@ -402,6 +406,7 @@ app.post('/api/invitations/:id/register', async (req, res) => {
     await db.respondInvitation(req.params.id, 'accepted');
     const inv2 = await db.getInvitation(req.params.id);
     if (inv2 && inv2.fromPlayer) {
+      if (inv2.status === 'accepted') db.createMatchFromInvite(inv2).catch(() => {});
       sendPushToPlayer(inv2.fromPlayer.toString(), `${name.trim()} aceptó tu invitación ✅`, `${inv2.date ? `📅 ${inv2.date} ` : ''}${inv2.court ? `📍 ${inv2.court}` : ''}`.trim(), '/');
     }
     res.json({ success: true, playerId: player.id });
@@ -420,6 +425,7 @@ app.put('/api/invitations/:id', async (req, res) => {
     if (!result) return res.status(404).json({ error: 'Invitación no encontrada o ya respondida' });
     const invAfter = await Invitation.findById(req.params.id);
     if (invAfter && invAfter.fromPlayer && invAfter.toPlayer) {
+      if (status === 'accepted') db.createMatchFromInvite(invAfter).catch(() => {});
       const responder = await db.getPlayer(invAfter.toPlayer.toString());
       const msgs = { accepted: 'aceptó tu invitación ✅', rejected: 'rechazó tu invitación ❌' };
       sendPushToPlayer(invAfter.fromPlayer.toString(), `${responder ? responder.name : 'Un jugador'} ${msgs[status]}`, `${invAfter.date ? `📅 ${invAfter.date} ` : ''}${invAfter.court ? `📍 ${invAfter.court}` : ''}`.trim(), '/');
@@ -682,9 +688,16 @@ app.post('/api/conversations/:id/messages', msgLimiter, async (req, res) => {
     if (!msg) return res.status(404).json({ error: 'Conversación no encontrada' });
     const conv = await mongoose.model('Conversation').findById(req.params.id);
     if (conv) {
-      const peerId = conv.participants.find(p => p.toString() !== from);
-      if (peerId) {
-        sendPushToPlayer(peerId.toString(), `Nuevo mensaje de ${msg.fromName} 💬`, msg.text.length > 80 ? msg.text.slice(0, 80) + '…' : msg.text, '/');
+      const isGroup = conv.type === 'group';
+      const targets = conv.participants.filter(p => p.toString() !== from);
+      const body = msg.text.length > 80 ? msg.text.slice(0, 80) + '…' : msg.text;
+      if (isGroup) {
+        for (const t of targets) {
+          sendPushToPlayer(t.toString(), `[${conv.name || 'Grupo'}] ${msg.fromName}`, body, '/');
+        }
+      } else {
+        const peerId = targets[0];
+        if (peerId) sendPushToPlayer(peerId.toString(), `Nuevo mensaje de ${msg.fromName} 💬`, body, '/');
       }
     }
     res.status(201).json(msg);
@@ -700,6 +713,81 @@ app.post('/api/conversations/:id/read', async (req, res) => {
     const ok = await db.markConversationRead(req.params.id, playerId);
     if (!ok) return res.status(404).json({ error: 'Conversación no encontrada' });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.post('/api/conversations/groups', async (req, res) => {
+  try {
+    const { creatorId, name, memberIds } = req.body;
+    if (!creatorId || !name) return res.status(400).json({ error: 'creatorId y name requeridos' });
+    const result = await db.createGroupConversation(creatorId, name, memberIds || []);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.put('/api/players/:id/slots', async (req, res) => {
+  try {
+    const { slots } = req.body;
+    if (!Array.isArray(slots)) return res.status(400).json({ error: 'slots debe ser un array' });
+    const player = await db.setPlayerSlots(req.params.id, slots);
+    if (!player) return res.status(404).json({ error: 'Jugador no encontrado' });
+    res.json({ ok: true, slots: player.slots || [] });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/api/players/:id/stats', async (req, res) => {
+  try {
+    res.json(await db.getPlayerStats(req.params.id));
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/api/matches/player/:id', async (req, res) => {
+  try {
+    res.json(await db.getMatchesForPlayer(req.params.id));
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.post('/api/matches/:id/result', async (req, res) => {
+  try {
+    const { winnerTeam, score, by } = req.body;
+    if (!by || !winnerTeam || !score) return res.status(400).json({ error: 'winnerTeam, score y by son requeridos' });
+    const result = await db.registerMatchResult(req.params.id, winnerTeam, score, by);
+    if (result.error) return res.status(400).json({ error: result.error });
+    const match = result.match;
+    const pids = match.players;
+    const winnerPlayers = [];
+    for (const pid of pids) {
+      const p = await db.getPlayer(pid);
+      if (p && p._id.toString() !== by) {
+        const won = result.winners.some(w => w.toString() === pid.toString());
+        winnerPlayers.push({ id: p._id.toString(), name: p.name, won });
+      }
+    }
+    for (const wp of winnerPlayers) {
+      sendPushToPlayer(wp.id, `${wp.won ? '🏆 Ganaste el partido!' : '📋 Resultado cargado'}`, `${match.score || ''}${match.court ? ` · ${match.court}` : ''}`, '/');
+    }
+    res.status(201).json({ match });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/api/app/summary/:playerId', async (req, res) => {
+  try {
+    const s = await db.buildAppSummary(req.params.playerId);
+    if (!s) return res.status(404).json({ error: 'Jugador no encontrado' });
+    res.json(s);
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
   }

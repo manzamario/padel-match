@@ -1,11 +1,12 @@
 {
   "name": "padel-match",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "App para encontrar dupla de pádel con sistema de invitaciones y penalizaciones",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "node scripts/test-e2e.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -16,5 +17,8 @@
     "mongoose": "^9.8.0",
     "uuid": "^11.0.0",
     "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.2.0"
   }
 }

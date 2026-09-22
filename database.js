@@ -4,6 +4,7 @@ const Rule = require('./models/Rule');
 const Conversation = require('./models/Conversation');
 const Message = require('./models/Message');
 const PushSubscription = require('./models/PushSubscription');
+const Match = require('./models/Match');
 
 const DEFAULT_RULES = [
   '1. DISPONIBILIDAD OBLIGATORIA: Todo jugador debe mantener actualizado su estado de disponibilidad (disponible/no disponible) en todo momento. Aparecer como "disponible" implica compromiso a responder invitaciones en tiempo y forma.',
@@ -237,18 +238,23 @@ function sortedPair(a, b) {
 }
 
 async function serializeConversation(conv, playerId) {
+  const isGroup = conv.type === 'group';
+  const base = {
+    id: conv._id.toString(),
+    group: isGroup,
+    name: (isGroup && conv.name) ? conv.name : '',
+    members: isGroup ? conv.participants.length : 0,
+    updatedAt: conv.updatedAt || conv.createdAt
+  };
+  const last = conv.lastMessage || {};
+  const lastFromP = last.from ? await Player.findById(last.from) : null;
+  base.lastMessage = last.text ? { text: last.text, from: last.from || '', fromName: lastFromP ? lastFromP.name : '', at: last.at || null } : null;
+  if (isGroup) return base;
   const peers = conv.participants.filter(p => p.toString() !== playerId);
   const peerId = peers[0] || conv.participants[0];
   const peerP = await Player.findById(peerId);
-  const peer = peerP ? { id: peerP._id.toString(), name: peerP.name, phone: peerP.phone, category: peerP.category, available: peerP.available } : { id: peerId.toString(), name: 'Desconocido', phone: '', category: '', available: false };
-  const last = conv.lastMessage || {};
-  const lastFromP = last.from ? await Player.findById(last.from) : null;
-  return {
-    id: conv._id.toString(),
-    peer,
-    lastMessage: last.text ? { text: last.text, from: last.from || '', fromName: lastFromP ? lastFromP.name : '', at: last.at || null } : null,
-    updatedAt: conv.updatedAt || conv.createdAt
-  };
+  base.peer = peerP ? { id: peerP._id.toString(), name: peerP.name, phone: peerP.phone, category: peerP.category, available: peerP.available } : { id: peerId.toString(), name: 'Desconocido', phone: '', category: '', available: false };
+  return base;
 }
 
 async function getUnreadMap(conversationIds, playerId) {
@@ -262,7 +268,7 @@ async function getUnreadMap(conversationIds, playerId) {
 
 async function getOrCreateConversation(aId, bId) {
   if (aId === bId) return null;
-  let conv = await Conversation.findOne({ participants: { $all: [aId, bId] } });
+  let conv = await Conversation.findOne({ participants: { $all: [aId, bId] }, type: { $ne: 'group' } });
   if (!conv) {
     const [p1, p2] = await Promise.all([Player.findById(aId), Player.findById(bId)]);
     if (!p1 || !p2) return null;
@@ -385,6 +391,263 @@ async function getPushSubscriptions(playerId) {
   return subs.map(s => ({ endpoint: s.endpoint, keys: s.keys }));
 }
 
+// --- MATCHES / STATS / COMPAT / SLOTS / GROUPS / SUMMARY ---
+function makeMatchId() {
+  return 'mt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+function makeGroupId() {
+  return 'cv_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+async function createMatchFromInvite(inv) {
+  const pluckId = (x) => {
+    if (!x) return '';
+    if (typeof x === 'string') return x;
+    return x._id ? x._id.toString() : (x.id ? x.id.toString() : '');
+  };
+  const invId = pluckId(inv._id) || pluckId(inv.id);
+  if (!invId) return null;
+  const existing = await Match.findOne({ inviteId: invId });
+  if (existing) return existing.toObject();
+  const from = pluckId(inv.fromPlayer) || pluckId(inv.fromPlayerId);
+  const to = pluckId(inv.toPlayer);
+  const players = [from, to].filter(Boolean);
+  if (players.length < 2) return null;
+  const m = await Match.create({
+    _id: makeMatchId(),
+    teamA: [from],
+    teamB: [to],
+    players,
+    inviteId: invId,
+    court: inv.court || '',
+    date: inv.date || '',
+    time: inv.time || '',
+    createdBy: from,
+    status: 'pending'
+  });
+  return m.toObject();
+}
+
+async function getMatchById(id) {
+  const m = await Match.findById(id);
+  return m ? m.toObject() : null;
+}
+
+async function getMatchesForPlayer(playerId) {
+  const matches = await Match.find({ players: playerId }).sort({ createdAt: -1 }).limit(100).populate('players', 'name');
+  return matches.map(m => {
+    const teamA = (m.teamA || []).map(id => { const p = m.players.find(x => x && x._id.toString() === id); return { id, name: p ? p.name : '?' }; });
+    const teamB = (m.teamB || []).map(id => { const p = m.players.find(x => x && x._id.toString() === id); return { id, name: p ? p.name : '?' }; });
+    const myTeam = m.teamA.includes(playerId) ? 'A' : (m.teamB.includes(playerId) ? 'B' : null);
+    const iWon = m.status === 'completed' && myTeam ? m.winnerTeam === myTeam : null;
+    const opponents = m.players
+      .filter(x => x && x._id.toString() !== playerId)
+      .map(x => ({ id: x._id.toString(), name: x.name || '?' }));
+    return {
+      id: m._id.toString(),
+      inviteId: m.inviteId || null,
+      status: m.status,
+      score: m.score || '',
+      winnerTeam: m.winnerTeam || null,
+      court: m.court || '',
+      date: m.date || '',
+      time: m.time || '',
+      createdAt: m.createdAt,
+      teamA,
+      teamB,
+      myTeam,
+      iWon,
+      opponents
+    };
+  });
+}
+
+async function registerMatchResult(matchId, winnerTeam, score, byPlayerId) {
+  const m = await Match.findById(matchId);
+  if (!m) return { error: 'Partido no encontrado' };
+  if (m.status !== 'pending') return { error: 'Este partido ya tiene un resultado cargado' };
+  const pid = byPlayerId.toString();
+  if (!m.players.some(p => p.toString() === pid)) return { error: 'No sos parte de este partido' };
+  const s = (score || '').toString().trim();
+  if (!s) return { error: 'El marcador no puede estar vacío' };
+  if (s.length > 60) return { error: 'El marcador es demasiado largo (máx. 60 caracteres)' };
+  const team = winnerTeam === 'A' ? 'A' : (winnerTeam === 'B' ? 'B' : null);
+  if (!team) return { error: 'Falta indicar quién ganó' };
+  const winners = team === 'A' ? (m.teamA || []) : (m.teamB || []);
+  const losers = team === 'A' ? (m.teamB || []) : (m.teamA || []);
+  m.winnerTeam = team;
+  m.winners = winners;
+  m.losers = losers;
+  m.score = s;
+  m.status = 'completed';
+  await m.save();
+  return { match: m.toObject(), winners, losers };
+}
+
+async function buildAllMatchStatsMap() {
+  const all = await Match.find({ status: 'completed' }).select('players winners losers createdAt').lean();
+  const map = {};
+  for (const m of all) {
+    const wonSet = new Set((m.winners || []).map(x => x.toString()));
+    for (const p of (m.players || [])) {
+      const pid = p.toString();
+      if (!map[pid]) map[pid] = { played: 0, wins: 0, losses: 0, recent: [] };
+      map[pid].played++;
+      const won = wonSet.has(pid);
+      if (won) map[pid].wins++; else map[pid].losses++;
+      map[pid].recent.push({ at: m.createdAt ? m.createdAt.getTime() : 0, won });
+    }
+  }
+  for (const pid of Object.keys(map)) {
+    const st = map[pid];
+    st.recent.sort((a, b) => b.at - a.at);
+    const recent = st.recent.slice(0, 30);
+    let streak = 0;
+    if (recent.length) {
+      const firstWon = recent[0].won;
+      for (const r of recent) {
+        if (r.won === firstWon) streak += firstWon ? 1 : -1;
+        else break;
+      }
+    }
+    st.recent = undefined;
+    st.streak = streak;
+    st.winRate = st.played ? Math.round((st.wins / st.played) * 100) : null;
+  }
+  return map;
+}
+
+async function buildInvitationStatsMap() {
+  const rows = await Invitation.aggregate([
+    { $group: {
+        _id: '$toPlayer',
+        total: { $sum: 1 },
+        accepted: { $sum: { $cond: [{ $eq: ['$status', 'accepted'] }, 1, 0] } },
+        responded: { $sum: { $cond: [{ $in: ['$status', ['accepted', 'rejected']] }, 1, 0] } }
+      } }
+  ]);
+  const map = {};
+  for (const r of rows) {
+    const id = r._id ? r._id.toString() : '';
+    const total = r.total || 0;
+    map[id] = {
+      received: total,
+      accepted: r.accepted || 0,
+      responded: r.responded || 0,
+      acceptRate: total ? Math.round(((r.accepted || 0) / total) * 100) : 100,
+      responseRate: total ? Math.round(((r.responded || 0) / total) * 100) : 100
+    };
+  }
+  return map;
+}
+
+function emptyStats() {
+  return { played: 0, wins: 0, losses: 0, winRate: null, streak: 0, received: 0, accepted: 0, responded: 0, acceptRate: 100, responseRate: 100, pendingMatches: 0 };
+}
+
+async function getPlayerStats(playerId) {
+  const all = await buildAllMatchStatsMap();
+  const invs = await buildInvitationStatsMap();
+  const stats = { ...emptyStats(), ...(all[playerId] || {}), ...(invs[playerId] || {}) };
+  stats.pendingMatches = await Match.countDocuments({ players: playerId, status: 'pending' });
+  return stats;
+}
+
+function slotsOverlap(slotsA, slotsB) {
+  if (!slotsA || !slotsB || !slotsA.length || !slotsB.length) return null;
+  for (const a of slotsA) {
+    for (const b of slotsB) {
+      if (a.day === b.day && a.from < b.to && b.from < a.to) return true;
+    }
+  }
+  return false;
+}
+
+function computeCompat(viewer, target, viewerStats, targetStats) {
+  const catDiff = Math.abs((parseInt(viewer.category, 10) || 0) - (parseInt(target.category, 10) || 0));
+  const catScore = Math.max(0, 100 - catDiff * 15);
+  const relScore = Math.round(((viewerStats.acceptRate || 100) + (targetStats.acceptRate || 100)) / 2);
+  const overlap = slotsOverlap(viewer.slots, target.slots);
+  let availScore = null;
+  if (overlap === true) availScore = 100;
+  else if (overlap === false) availScore = 30;
+  let total;
+  if (availScore === null) {
+    total = Math.round(catScore * 0.60 + relScore * 0.40);
+  } else {
+    total = Math.round(catScore * 0.45 + relScore * 0.35 + availScore * 0.20);
+  }
+  return { total: Math.max(0, Math.min(100, total)), cat: catScore, rel: relScore, avail: availScore };
+}
+
+async function setPlayerSlots(playerId, slots) {
+  const clean = [];
+  for (const s of slots || []) {
+    const day = parseInt(s.day, 10);
+    const from = (s.from || '').trim();
+    const to = (s.to || '').trim();
+    if (isNaN(day) || day < 0 || day > 6) continue;
+    if (!/^\d{2}:\d{2}$/.test(from) || !/^\d{2}:\d{2}$/.test(to)) continue;
+    if (from >= to) continue;
+    clean.push({ day, from, to });
+  }
+  if (clean.length > 30) clean.length = 30;
+  const p = await Player.findByIdAndUpdate(playerId, { slots: clean }, { new: true });
+  return p ? { ...p.toObject(), id: p._id.toString() } : null;
+}
+
+async function createGroupConversation(creatorId, name, memberIds) {
+  const displayName = (name || '').toString().trim().slice(0, 60);
+  if (!displayName) return { error: 'El grupo necesita un nombre' };
+  const members = [];
+  const pending = new Set([creatorId.toString(), ...(Array.isArray(memberIds) ? memberIds : []).map(m => m.toString())]);
+  for (const pid of pending) {
+    const exists = await Player.findById(pid);
+    if (exists) members.push(pid);
+  }
+  if (members.length < 2) return { error: 'El grupo necesita al menos 2 jugadores' };
+  if (members.length > 30) return { error: 'Máximo 30 jugadores por grupo' };
+  const conv = await Conversation.create({ _id: makeGroupId(), type: 'group', name: displayName, participants: members, lastMessage: { text: '', from: '', at: new Date() } });
+  return { id: conv._id.toString() };
+}
+
+async function getConversationType(id) {
+  const conv = await Conversation.findById(id);
+  return conv ? { group: conv.type === 'group', participants: (conv.participants || []).map(p => p.toString()), name: conv.name || '' } : null;
+}
+
+async function buildAppSummary(playerId) {
+  const me = await getPlayer(playerId);
+  if (!me) return null;
+  const meObj = me.toObject ? me.toObject() : me;
+  const [allPlayers, pending, sent, rules, convos, matches, matchStats, invStats] = await Promise.all([
+    getAllPlayers(),
+    getPendingInvitationsForPlayer(playerId),
+    getSentInvitations(playerId),
+    getRules(),
+    getConversationsForPlayer(playerId),
+    getMatchesForPlayer(playerId),
+    buildAllMatchStatsMap(),
+    buildInvitationStatsMap()
+  ]);
+  const stats = { ...emptyStats(), ...(matchStats[playerId] || {}), ...(invStats[playerId] || {}) };
+  stats.pendingMatches = matches.filter(m => m.status === 'pending').length;
+  const statsFor = (pid) => {
+    const base = { ...emptyStats(), ...(matchStats[pid] || {}), ...(invStats[pid] || {}) };
+    base.pendingMatches = 0;
+    return { played: base.played, wins: base.wins, losses: base.losses, winRate: base.winRate, streak: base.streak, acceptRate: base.acceptRate, responseRate: base.responseRate, received: base.received, pendingMatches: base.pendingMatches };
+  };
+  const players = allPlayers
+    .filter(p => p._id && p._id.toString() !== playerId)
+    .map(p => {
+      const otherStats = statsFor(p._id.toString());
+      const compat = computeCompat(meObj, p, stats, otherStats);
+      return { ...p, id: p._id.toString(), compat };
+    });
+  return { me: { ...meObj, id: meObj._id.toString() }, players, pending, sent, rules, convos, matches, stats };
+}
+
 // --- ADMIN ---
 async function getAllPlayersFull() {
   const players = await Player.find().sort({ name: 1 }).lean();
@@ -439,6 +702,9 @@ module.exports = {
   deleteInvitation, createInvitation, getInvitationByShortId, getInvitation, getInvitationWithFrom, getPendingInvitationsForPlayer, getSentInvitations,
   respondInvitation, getInvitationStats, getRules, updateCategory,
   getOrCreateConversation, getConversationsForPlayer, getConversationMessages, sendMessage, markConversationRead, getUnreadChatCount,
+  createGroupConversation, getConversationType,
+  createMatchFromInvite, getMatchById, getMatchesForPlayer, registerMatchResult, getPlayerStats,
+  setPlayerSlots, computeCompat, buildAppSummary,
   savePushSubscription, removePushSubscription, getPushSubscriptions,
   getAllPlayersFull, adminSuspendPlayer, adminUnsuspendPlayer, adminAddWarning,
   updateRule, getAdminStats
