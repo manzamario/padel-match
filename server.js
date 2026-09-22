@@ -148,7 +148,6 @@ app.use('/api/leagues', apiLimiter);
 app.use('/api/seeking', apiLimiter);
 app.use('/api/payments', apiLimiter);
 app.use('/api/subscription', apiLimiter);
-app.use('/api/billing', apiLimiter);
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -1002,108 +1001,6 @@ app.delete('/api/seeking/:id', async (req, res) => {
   }
 });
 
-// ─── FREEMIUM / BILLING ────────────────────────────────
-
-app.get('/api/billing/subscription/:playerId', async (req, res) => {
-  try {
-    const sub = await db.getSubscription(req.params.playerId);
-    if (!sub) return res.status(404).json({ error: 'Jugador no encontrado' });
-    res.json(sub);
-  } catch (err) {
-    res.status(500).json({ error: 'Error interno' });
-  }
-});
-
-app.post('/api/billing/checkout', express.json({ limit: '10kb' }), async (req, res) => {
-  try {
-    const { playerId, planCode } = req.body;
-    if (!playerId || !planCode) return res.status(400).json({ error: 'playerId y planCode requeridos' });
-    const created = await db.createOrGetPayment(playerId, planCode);
-    if (created.error) return res.status(400).json({ error: created.error });
-    const token = process.env.MP_ACCESS_TOKEN;
-    if (!token) {
-      return res.status(503).json({
-        error: 'Pagos no configurados todavía (falta MP_ACCESS_TOKEN en Render)',
-        code: 'MP_NOT_CONFIGURED',
-        paymentId: created.payment._id
-      });
-    }
-    const origin = req.headers.origin || process.env.FRONTEND_ORIGIN || 'https://padel-match-p50g.onrender.com';
-    const prefBody = {
-      items: [{
-        title: `Padel Match ${created.plan.label}`,
-        quantity: 1,
-        unit_price: created.amount,
-        currency_id: 'ARS'
-      }],
-      external_reference: `premium:${planCode}:${playerId}:${created.payment._id}`,
-      notification_url: `${origin}/api/billing/webhook`,
-      back_urls: {
-        success: `${origin}/?premium=ok`,
-        failure: `${origin}/?premium=fail`,
-        pending: `${origin}/?premium=pending`
-      },
-      auto_return: 'approved',
-      payer: { email: undefined },
-      metadata: { playerId, planCode }
-    };
-    const r = await fetch('https://api.mercadopago.com/checkout/preferences', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(prefBody)
-    });
-    const data = await r.json();
-    if (!r.ok || !data.init_point) {
-      return res.status(502).json({ error: 'No se pudo crear el checkout de MercadoPago', detail: data });
-    }
-    await Payment.findByIdAndUpdate(created.payment._id, { preferenceId: data.id });
-    res.json({ initPoint: data.init_point, paymentId: created.payment._id, planCode, amount: created.amount });
-  } catch (err) {
-    console.error('checkout error:', err.message);
-    res.status(500).json({ error: 'Error interno' });
-  }
-});
-
-app.post('/api/billing/webhook', async (req, res) => {
-  try {
-    const result = await db.handleMercadoPagoWebhook(req.body);
-    res.status(200).json(result);
-  } catch (err) {
-    console.error('webhook error:', err.message);
-    res.status(200).json({ ok: true });
-  }
-});
-
-app.get('/api/billing/confirm', async (req, res) => {
-  try {
-    const { payment_id, collection_id, playerId } = req.query;
-    const id = payment_id || collection_id;
-    if (!id) return res.status(400).json({ error: 'payment_id requerido' });
-    const result = await db.confirmPaymentFromReturn(String(id), playerId || null);
-    res.status(result.ok ? 200 : 400).json(result);
-  } catch (err) {
-    res.status(500).json({ error: 'Error interno' });
-  }
-});
-
-app.post('/api/billing/activate-test', async (req, res) => {
-  try {
-    if (process.env.NODE_ENV === 'production' && process.env.TEST_MODE !== '1') {
-      return res.status(403).json({ error: 'Solo en test' });
-    }
-    const { playerId, months } = req.body;
-    if (!playerId) return res.status(400).json({ error: 'playerId requerido' });
-    const r = await db.activatePremium(playerId, Number(months) || 1, null);
-    if (r.error) return res.status(400).json({ error: r.error });
-    res.json({ ok: true, plan: r.plan, planExpiresAt: r.planExpiresAt });
-  } catch (err) {
-    res.status(500).json({ error: 'Error interno' });
-  }
-});
-
 // ─── FREEMIUM / MERCADOPAGO ────────────────────────────
 
 app.get('/api/subscription/:playerId', async (req, res) => {
@@ -1127,13 +1024,13 @@ app.post('/api/payments/checkout', async (req, res) => {
     const origin = process.env.FRONTEND_ORIGIN || req.protocol + '://' + req.get('host');
     if (!token) {
       if (process.env.TEST_MODE === '1' || process.env.NODE_ENV === 'test') {
-        await db.activatePremium(playerId, created.plan.months, { paymentId: 'test_' + created.payment.id });
+        await db.activatePremium(playerId, created.plan.months, { paymentId: 'test_' + created.payment._id });
         return res.json({ ok: true, test: true, plan: await db.getSubscription(playerId) });
       }
       return res.status(503).json({ error: 'Pagos no configurados (falta MP_ACCESS_TOKEN)' });
     }
 
-    const externalReference = `premium:${planCode}:${playerId}:${created.payment.id}`;
+    const externalReference = `premium:${planCode}:${playerId}:${created.payment._id}`;
     const preference = {
       items: [{
         title: `Padel Match - ${created.plan.label}`,
@@ -1165,8 +1062,8 @@ app.post('/api/payments/checkout', async (req, res) => {
       return res.status(502).json({ error: 'No se pudo crear el pago en MercadoPago' });
     }
     const pref = await mp.json();
-    await Payment.findByIdAndUpdate(created.payment.id, { preferenceId: pref.id || '' });
-    res.json({ init_point: pref.init_point, preferenceId: pref.id, paymentId: created.payment.id });
+    await Payment.findByIdAndUpdate(created.payment._id, { preferenceId: pref.id || '' });
+    res.json({ init_point: pref.init_point, preferenceId: pref.id, paymentId: created.payment._id });
   } catch (err) {
     console.error('POST /api/payments/checkout error:', err.message);
     res.status(500).json({ error: 'Error interno' });
