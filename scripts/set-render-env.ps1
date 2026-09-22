@@ -1,7 +1,7 @@
 param(
   [Parameter(Mandatory)]
   [string]$ApiKey,
-  [string]$ServiceId = "srv-cm0np8d2iqrc73c3npdg"
+  [string]$ServiceId = "srv-d9h8c57avr4c73c76ehg"
 )
 
 $envFile = "$PSScriptRoot\..\render-env.json"

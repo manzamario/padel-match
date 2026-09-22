@@ -162,6 +162,20 @@ async function main() {
   const sumA2 = (await jfetch(`/api/app/summary/${A}`)).body;
   ok('summary incluye grupo en convos', sumA2.convos.some(c => c.group === true));
 
+  console.log('▶ VAPID VIA ADMIN');
+  const webpush = require('web-push');
+  const gen = webpush.generateVAPIDKeys();
+  const al = await jfetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: 'test-admin-pass' }) });
+  ok('admin login', al.status === 200 && !!al.body.token);
+  const vkNoAuth = await jfetch('/api/admin/vapid', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ publicKey: gen.publicKey, privateKey: gen.privateKey }) });
+  ok('vapid sin token → 401', vkNoAuth.status === 401);
+  const vkBad = await jfetch('/api/admin/vapid', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${al.body.token}` }, body: JSON.stringify({ publicKey: 'no-es-válida', privateKey: 'tampoco' }) });
+  ok('vapid inválidas → 400 (no se persisten)', vkBad.status === 400);
+  const vk = await jfetch('/api/admin/vapid', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${al.body.token}` }, body: JSON.stringify({ publicKey: gen.publicKey, privateKey: gen.privateKey }) });
+  ok('vapid válidas seteadas → enabled true', vk.status === 200 && vk.body.enabled === true && vk.body.publicKey === gen.publicKey, { status: vk.status, body: vk.body });
+  const pk = (await jfetch('/api/push/public-key')).body;
+  ok('public-key devuelve enabled + clave', pk.enabled === true && pk.publicKey === gen.publicKey);
+
   console.log('▶ REGLAS');
   ok('reglas presentes', sum1.rules.length >= 10);
 

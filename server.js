@@ -39,27 +39,54 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'https://padel-match-p50g
 
 // ─── WEB PUSH (VAPID) ─────────────────────────────────
 const fs = require('fs');
+const Config = require('./models/Config');
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@padel-match.app';
 
-// Fallback local (desarrollo): push-keys.json es gitignored
+// Jerarquía de claves: 1) env vars, 2) push-keys.json local (gitignored), 3) MongoDB (configs/vapid)
 let pushReady = false;
-try {
-  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-    pushReady = true;
-  } else if (fs.existsSync(path.join(__dirname, 'push-keys.json'))) {
-    const keys = JSON.parse(fs.readFileSync(path.join(__dirname, 'push-keys.json'), 'utf8'));
-    webpush.setVapidDetails(keys.subject || VAPID_SUBJECT, keys.publicKey, keys.privateKey);
-    pushReady = true;
-  }
-} catch (err) {
-  console.error('VAPID setup error:', err.message);
+let vapidPublicKey = null;
+
+function applyVapid(pub, priv, subject) {
+  webpush.setVapidDetails(subject || VAPID_SUBJECT, pub, priv);
+  vapidPublicKey = pub;
+  pushReady = true;
 }
 
+async function ensureVapid() {
+  if (pushReady) return true;
+  try {
+    if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+      applyVapid(VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT);
+      return true;
+    }
+    const file = path.join(__dirname, 'push-keys.json');
+    if (fs.existsSync(file)) {
+      const keys = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (keys.publicKey && keys.privateKey) {
+        applyVapid(keys.publicKey, keys.privateKey, keys.subject || VAPID_SUBJECT);
+        return true;
+      }
+    }
+    if (mongoose.connection.readyState === 1) {
+      const cfg = await Config.findById('vapid').lean();
+      if (cfg && cfg.value && cfg.value.publicKey && cfg.value.privateKey) {
+        applyVapid(cfg.value.publicKey, cfg.value.privateKey, cfg.value.subject || VAPID_SUBJECT);
+        console.log('VAPID cargado desde MongoDB');
+        return true;
+      }
+    }
+  } catch (err) {
+    console.error('VAPID setup error:', err.message);
+  }
+  return pushReady;
+}
+ensureVapid().catch(() => {});
+
 async function sendPushToPlayer(toPlayerId, title, body, url) {
-  if (!pushReady || !toPlayerId) return;
+  if (!toPlayerId) return;
+  if (!(await ensureVapid())) return;
   const subs = await db.getPushSubscriptions(toPlayerId).catch(() => []);
   if (!subs.length) return;
   const payload = JSON.stringify({ title, body, url: url || '/', icon: '/Logo.png', badge: '/Logo.png' });
@@ -523,6 +550,28 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
   }
 });
 
+// Carga/actualiza claves VAPID (solo admin). Las guarda en Mongo para que
+// el servidor (y los próximos deploys) las tomen sin necesitar env vars en Render.
+app.put('/api/admin/vapid', requireAdmin, async (req, res) => {
+  try {
+    const { publicKey, privateKey, subject } = req.body;
+    if (!publicKey || !privateKey) {
+      return res.status(400).json({ error: 'publicKey y privateKey requeridos' });
+    }
+    try {
+      applyVapid(publicKey, privateKey, subject);
+    } catch (e) {
+      return res.status(400).json({ error: 'Claves VAPID inválidas' });
+    }
+    await Config.findByIdAndUpdate('vapid', {
+      value: { publicKey, privateKey, subject: subject || VAPID_SUBJECT }
+    }, { upsert: true });
+    res.json({ ok: true, enabled: pushReady, publicKey: vapidPublicKey });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
 app.put('/api/admin/players/:id/suspend', requireAdmin, async (req, res) => {
   try {
     const { days } = req.body;
@@ -621,9 +670,9 @@ const msgLimiter = rateLimit({
   message: { error: 'Demasiados mensajes, intentá de nuevo en un momento' },
 });
 
-app.get('/api/push/public-key', (req, res) => {
-  const key = (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) ? VAPID_PUBLIC_KEY : (pushReady && (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'push-keys.json'), 'utf8')).publicKey; } catch { return null; } })());
-  res.json({ enabled: pushReady, publicKey: key || null });
+app.get('/api/push/public-key', async (req, res) => {
+  await ensureVapid();
+  res.json({ enabled: pushReady, publicKey: vapidPublicKey });
 });
 
 app.post('/api/push/subscribe', async (req, res) => {
@@ -632,7 +681,7 @@ app.post('/api/push/subscribe', async (req, res) => {
     if (!playerId || !subscription) return res.status(400).json({ error: 'playerId y subscription requeridos' });
     const player = await db.getPlayer(playerId);
     if (!player) return res.status(404).json({ error: 'Jugador no encontrado' });
-    if (!pushReady) return res.status(503).json({ error: 'Notificaciones no configuradas' });
+    if (!(await ensureVapid())) return res.status(503).json({ error: 'Notificaciones no configuradas' });
     await db.savePushSubscription(playerId, subscription);
     res.json({ ok: true });
   } catch (err) {
@@ -819,6 +868,7 @@ async function connectMongo(retries = 5) {
         console.log('Conectado a MongoDB');
         await db.ensureRules();
         console.log('Reglas inicializadas');
+        ensureVapid().catch(() => {});
         return true;
       } catch (err) {
         console.log(`Intento ${i}/${retries} falló: ${err.message}`);
