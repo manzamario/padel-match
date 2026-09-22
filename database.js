@@ -482,6 +482,11 @@ async function registerMatchResult(matchId, winnerTeam, score, byPlayerId) {
   m.score = s;
   m.status = 'completed';
   await m.save();
+  try {
+    await applyMatchRatingAndPoints(winners, losers);
+  } catch (e) {
+    console.error('applyMatchRatingAndPoints error:', e.message);
+  }
   return { match: m.toObject(), winners, losers };
 }
 
@@ -544,6 +549,170 @@ async function buildInvitationStatsMap() {
 
 function emptyStats() {
   return { played: 0, wins: 0, losses: 0, winRate: null, streak: 0, received: 0, accepted: 0, responded: 0, acceptRate: 100, responseRate: 100, pendingMatches: 0 };
+}
+
+// --- FASE 2: RATING / LADDER / GAMIFICACIÓN / MAPA ---
+const ELO_K = 32;
+const ELO_BASE = 1500;
+
+const ACHIEVEMENT_DEFS = [
+  { id: 'first_match', icon: '🎾', name: 'Primer partido', desc: 'Completá tu primer partido' },
+  { id: 'first_win', icon: '🏆', name: 'Primera victoria', desc: 'Ganá tu primer partido' },
+  { id: 'streak_3', icon: '🔥', name: 'Racha x3', desc: '3 victorias seguidas' },
+  { id: 'streak_5', icon: '⚡', name: 'Racha x5', desc: '5 victorias seguidas' },
+  { id: 'played_10', icon: '🎾', name: '10 partidos', desc: 'Jugá 10 partidos' },
+  { id: 'played_25', icon: '🏅', name: '25 partidos', desc: 'Jugá 25 partidos' },
+  { id: 'wins_10', icon: '💪', name: '10 victorias', desc: 'Ganá 10 partidos' },
+  { id: 'fair_play', icon: '🤝', name: 'Fair play', desc: 'Reputación 90+ con 5+ invitaciones recibidas' },
+  { id: 'responsive', icon: '💬', name: 'Respondedor', desc: '100% de respuesta con 3+ invitaciones' }
+];
+
+function computeReputation(stats, warnings = 0, rejections = 0) {
+  let score = 100;
+  const received = stats.received || 0;
+  if (received > 0) {
+    score = (stats.acceptRate || 0) * 0.5 + (stats.responseRate || 0) * 0.3 + 20;
+  }
+  score -= (warnings || 0) * 15;
+  score -= Math.min(30, (rejections || 0) * 5);
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function computeAchievements(stats, reputation) {
+  const unlocked = [];
+  if ((stats.played || 0) >= 1) unlocked.push('first_match');
+  if ((stats.wins || 0) >= 1) unlocked.push('first_win');
+  if ((stats.streak || 0) >= 3) unlocked.push('streak_3');
+  if ((stats.streak || 0) >= 5) unlocked.push('streak_5');
+  if ((stats.played || 0) >= 10) unlocked.push('played_10');
+  if ((stats.played || 0) >= 25) unlocked.push('played_25');
+  if ((stats.wins || 0) >= 10) unlocked.push('wins_10');
+  if (reputation >= 90 && (stats.received || 0) >= 5) unlocked.push('fair_play');
+  if ((stats.received || 0) >= 3 && (stats.acceptRate || 0) === 100 && (stats.responseRate || 0) === 100) unlocked.push('responsive');
+  return unlocked;
+}
+
+function expectedScore(ra, rb) {
+  return 1 / (1 + Math.pow(10, (rb - ra) / 400));
+}
+
+async function applyMatchRatingAndPoints(winners, losers) {
+  const ids = [...winners, ...losers].map(String);
+  if (!ids.length) return;
+  const docs = await Player.find({ _id: { $in: ids } });
+  const byId = new Map(docs.map(p => [p._id.toString(), p]));
+  const teamRating = (team) => {
+    if (!team.length) return ELO_BASE;
+    let sum = 0;
+    for (const id of team) {
+      const p = byId.get(String(id));
+      sum += p && typeof p.rating === 'number' ? p.rating : ELO_BASE;
+    }
+    return sum / team.length;
+  };
+  const ra = teamRating(winners);
+  const rb = teamRating(losers);
+  const ea = expectedScore(ra, rb);
+  const eb = 1 - ea;
+  const deltaWin = Math.round(ELO_K * (1 - ea));
+  const deltaLoss = Math.round(ELO_K * (0 - eb));
+  const ops = [];
+  for (const id of winners) {
+    const p = byId.get(String(id));
+    if (!p) continue;
+    const rating = (typeof p.rating === 'number' ? p.rating : ELO_BASE) + deltaWin;
+    const points = (p.points || 0) + 10;
+    ops.push(Player.updateOne({ _id: p._id }, { $set: { rating, points } }));
+  }
+  for (const id of losers) {
+    const p = byId.get(String(id));
+    if (!p) continue;
+    const rating = (typeof p.rating === 'number' ? p.rating : ELO_BASE) + deltaLoss;
+    const points = (p.points || 0) + 3;
+    ops.push(Player.updateOne({ _id: p._id }, { $set: { rating, points } }));
+  }
+  if (ops.length) await Promise.all(ops);
+}
+
+async function getLadder() {
+  const [players, matchStats, invStats] = await Promise.all([
+    Player.find({ isComplete: true }).lean(),
+    buildAllMatchStatsMap(),
+    buildInvitationStatsMap()
+  ]);
+  const rows = players.map(p => {
+    const pid = p._id.toString();
+    const stats = { ...emptyStats(), ...(matchStats[pid] || {}), ...(invStats[pid] || {}) };
+    const reputation = computeReputation(stats, p.warnings || 0, p.rejections || 0);
+    const achievements = computeAchievements(stats, reputation);
+    return {
+      id: pid,
+      name: p.name,
+      category: p.category,
+      rating: typeof p.rating === 'number' ? p.rating : ELO_BASE,
+      points: p.points || 0,
+      played: stats.played,
+      wins: stats.wins,
+      losses: stats.losses,
+      winRate: stats.winRate,
+      streak: stats.streak,
+      reputation,
+      achievements,
+      available: !!p.available,
+      suspended: !!p.suspended
+    };
+  });
+  rows.sort((a, b) => b.rating - a.rating || b.points - a.points || (b.wins || 0) - (a.wins || 0) || String(a.name).localeCompare(String(b.name)));
+  rows.forEach((r, i) => { r.rank = i + 1; });
+  return rows;
+}
+
+async function getAchievementCatalog() {
+  return ACHIEVEMENT_DEFS.map(a => ({ ...a }));
+}
+
+async function setPlayerLocation(id, lat, lng, shared) {
+  if (shared === false || lat == null || lng == null) {
+    const p = await Player.findByIdAndUpdate(id, {
+      location: { lat: null, lng: null, shared: false, at: null }
+    }, { new: true });
+    return p ? p.toObject() : null;
+  }
+  const nLat = Number(lat);
+  const nLng = Number(lng);
+  if (!Number.isFinite(nLat) || !Number.isFinite(nLng) || nLat < -90 || nLat > 90 || nLng < -180 || nLng > 180) {
+    return { error: 'Coordenadas inválidas' };
+  }
+  const p = await Player.findByIdAndUpdate(id, {
+    location: { lat: nLat, lng: nLng, shared: true, at: new Date() }
+  }, { new: true });
+  return p ? p.toObject() : null;
+}
+
+async function getMapView(viewerId) {
+  const players = await Player.find({ isComplete: true, 'location.shared': true }).lean();
+  const courtsAgg = await Match.aggregate([
+    { $match: { court: { $ne: '' }, status: { $in: ['pending', 'completed'] } } },
+    { $group: { _id: '$court', matches: { $sum: 1 }, lastAt: { $max: '$updatedAt' } } },
+    { $sort: { matches: -1 } },
+    { $limit: 50 }
+  ]);
+  const spots = courtsAgg.map(c => ({ name: c._id, matches: c.matches || 0, lastAt: c.lastAt || null }));
+  return {
+    players: players
+      .filter(p => p._id.toString() !== viewerId)
+      .map(p => ({
+        id: p._id.toString(),
+        name: p.name,
+        category: p.category,
+        lat: p.location && p.location.lat,
+        lng: p.location && p.location.lng,
+        available: !!p.available,
+        suspended: !!p.suspended,
+        rating: typeof p.rating === 'number' ? p.rating : ELO_BASE
+      })),
+    spots
+  };
 }
 
 async function getPlayerStats(playerId) {
@@ -621,7 +790,7 @@ async function buildAppSummary(playerId) {
   const me = await getPlayer(playerId);
   if (!me) return null;
   const meObj = me.toObject ? me.toObject() : me;
-  const [allPlayers, pending, sent, rules, convos, matches, matchStats, invStats] = await Promise.all([
+  const [allPlayers, pending, sent, rules, convos, matches, matchStats, invStats, ladder] = await Promise.all([
     getAllPlayers(),
     getPendingInvitationsForPlayer(playerId),
     getSentInvitations(playerId),
@@ -629,23 +798,57 @@ async function buildAppSummary(playerId) {
     getConversationsForPlayer(playerId),
     getMatchesForPlayer(playerId),
     buildAllMatchStatsMap(),
-    buildInvitationStatsMap()
+    buildInvitationStatsMap(),
+    getLadder()
   ]);
   const stats = { ...emptyStats(), ...(matchStats[playerId] || {}), ...(invStats[playerId] || {}) };
   stats.pendingMatches = matches.filter(m => m.status === 'pending').length;
+  const myLadder = ladder.find(r => r.id === playerId) || null;
+  const myRank = myLadder ? myLadder.rank : null;
+  const reputation = myLadder ? myLadder.reputation : computeReputation(stats, meObj.warnings || 0, meObj.rejections || 0);
+  const achievements = myLadder ? myLadder.achievements : computeAchievements(stats, reputation);
+  const gamification = {
+    rating: typeof meObj.rating === 'number' ? meObj.rating : ELO_BASE,
+    points: meObj.points || 0,
+    reputation,
+    achievements,
+    rank: myRank,
+    ladderSize: ladder.length
+  };
   const statsFor = (pid) => {
     const base = { ...emptyStats(), ...(matchStats[pid] || {}), ...(invStats[pid] || {}) };
     base.pendingMatches = 0;
     return { played: base.played, wins: base.wins, losses: base.losses, winRate: base.winRate, streak: base.streak, acceptRate: base.acceptRate, responseRate: base.responseRate, received: base.received, pendingMatches: base.pendingMatches };
   };
+  const ladderById = new Map(ladder.map(r => [r.id, r]));
   const players = allPlayers
     .filter(p => p._id && p._id.toString() !== playerId)
     .map(p => {
       const otherStats = statsFor(p._id.toString());
       const compat = computeCompat(meObj, p, stats, otherStats);
-      return { ...p, id: p._id.toString(), compat };
+      const lad = ladderById.get(p._id.toString());
+      return {
+        ...p,
+        id: p._id.toString(),
+        compat,
+        rating: lad ? lad.rating : (typeof p.rating === 'number' ? p.rating : ELO_BASE),
+        points: lad ? lad.points : (p.points || 0),
+        reputation: lad ? lad.reputation : null,
+        rank: lad ? lad.rank : null
+      };
     });
-  return { me: { ...meObj, id: meObj._id.toString() }, players, pending, sent, rules, convos, matches, stats };
+  return {
+    me: { ...meObj, id: meObj._id.toString(), gamification },
+    players,
+    pending,
+    sent,
+    rules,
+    convos,
+    matches,
+    stats,
+    ladder: ladder.slice(0, 100),
+    gamification
+  };
 }
 
 // --- ADMIN ---
@@ -705,6 +908,7 @@ module.exports = {
   createGroupConversation, getConversationType,
   createMatchFromInvite, getMatchById, getMatchesForPlayer, registerMatchResult, getPlayerStats,
   setPlayerSlots, computeCompat, buildAppSummary,
+  getLadder, getAchievementCatalog, setPlayerLocation, getMapView, computeReputation, computeAchievements,
   savePushSubscription, removePushSubscription, getPushSubscriptions,
   getAllPlayersFull, adminSuspendPlayer, adminUnsuspendPlayer, adminAddWarning,
   updateRule, getAdminStats

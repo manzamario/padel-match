@@ -141,6 +141,8 @@ app.use('/api/invitations', apiLimiter);
 app.use('/api/push', apiLimiter);
 app.use('/api/matches', apiLimiter);
 app.use('/api/app', apiLimiter);
+app.use('/api/ladder', apiLimiter);
+app.use('/api/map', apiLimiter);
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -799,6 +801,48 @@ app.get('/api/players/:id/stats', async (req, res) => {
   }
 });
 
+// ─── FASE 2: LADDER / LOGROS / MAPA ────────────────────
+
+app.get('/api/ladder', async (req, res) => {
+  try {
+    res.json(await db.getLadder());
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/api/achievements', async (req, res) => {
+  try {
+    res.json(await db.getAchievementCatalog());
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.put('/api/players/:id/location', async (req, res) => {
+  try {
+    const { lat, lng, shared } = req.body;
+    const player = await db.getPlayer(req.params.id);
+    if (!player) return res.status(404).json({ error: 'Jugador no encontrado' });
+    const result = await db.setPlayerLocation(req.params.id, lat, lng, shared);
+    if (result && result.error) return res.status(400).json({ error: result.error });
+    if (!result) return res.status(404).json({ error: 'Jugador no encontrado' });
+    res.json({ ok: true, location: result.location || null });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.get('/api/map/:playerId', async (req, res) => {
+  try {
+    const player = await db.getPlayer(req.params.playerId);
+    if (!player) return res.status(404).json({ error: 'Jugador no encontrado' });
+    res.json(await db.getMapView(req.params.playerId));
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
 app.get('/api/matches/player/:id', async (req, res) => {
   try {
     res.json(await db.getMatchesForPlayer(req.params.id));
@@ -826,7 +870,7 @@ app.post('/api/matches/:id/result', async (req, res) => {
     for (const wp of winnerPlayers) {
       sendPushToPlayer(wp.id, `${wp.won ? '🏆 Ganaste el partido!' : '📋 Resultado cargado'}`, `${match.score || ''}${match.court ? ` · ${match.court}` : ''}`, '/');
     }
-    res.status(201).json({ match });
+    res.status(201).json({ match, ratingUpdated: true });
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
   }

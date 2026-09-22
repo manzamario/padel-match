@@ -14,6 +14,15 @@ const playerSchema = new mongoose.Schema({
   suspendedUntil: { type: Date, default: null },
   warnings: { type: Number, default: 0 },
   isAdmin: { type: Boolean, default: false },
+  rating: { type: Number, default: 1500 },
+  points: { type: Number, default: 0 },
+  achievements: { type: [String], default: [] },
+  location: {
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null },
+    shared: { type: Boolean, default: false },
+    at: { type: Date, default: null }
+  },
   slots: {
     type: [{
       day: { type: Number, min: 0, max: 6 },

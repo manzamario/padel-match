@@ -179,6 +179,44 @@ async function main() {
   console.log('▶ REGLAS');
   ok('reglas presentes', sum1.rules.length >= 10);
 
+  console.log('▶ FASE 2: LADDER / ELO / GAMIFICACIÓN');
+  const ladder = (await jfetch('/api/ladder')).body;
+  ok('ladder es array con jugadores', Array.isArray(ladder) && ladder.length >= 4);
+  ok('ladder ordenado por rating desc', Array.isArray(ladder) && ladder.every((r, i, a) => i === 0 || a[i - 1].rating >= r.rating));
+  ok('ladder ranks 1..n', Array.isArray(ladder) && ladder.every((r, i) => r.rank === i + 1));
+  const ladA = ladder.find(r => r.id === A);
+  const ladB = ladder.find(r => r.id === B);
+  ok('A ganó → rating > 1500', ladA && ladA.rating > 1500, ladA);
+  ok('B perdió → rating < 1500', ladB && ladB.rating < 1500, ladB);
+  ok('A tiene puntos por victoria (>=10)', ladA && ladA.points >= 10, ladA);
+  ok('B tiene puntos por participación (>=3)', ladB && ladB.points >= 3, ladB);
+  ok('A logros incluyen first_match y first_win', ladA && ladA.achievements.includes('first_match') && ladA.achievements.includes('first_win'), ladA);
+  ok('B logros incluyen first_match sin first_win', ladB && ladB.achievements.includes('first_match') && !ladB.achievements.includes('first_win'), ladB);
+  ok('reputación numérica 0-100 en ladder', ladder.every(r => typeof r.reputation === 'number' && r.reputation >= 0 && r.reputation <= 100));
+
+  const ach = (await jfetch('/api/achievements')).body;
+  ok('catálogo de logros', Array.isArray(ach) && ach.length >= 8 && ach.every(a => a.id && a.name && a.icon));
+
+  const sum3 = (await jfetch(`/api/app/summary/${A}`)).body;
+  ok('summary incluye gamification con rating/points/reputation/rank', sum3 && sum3.gamification && typeof sum3.gamification.rating === 'number' && typeof sum3.gamification.points === 'number' && typeof sum3.gamification.reputation === 'number' && typeof sum3.gamification.rank === 'number');
+  ok('summary me.gamification coincide', sum3.me && sum3.me.gamification && sum3.me.gamification.rating === sum3.gamification.rating);
+  ok('summary ladder presente', Array.isArray(sum3.ladder) && sum3.ladder.length >= 4);
+  ok('players del summary traen rating/reputation/rank', sum3.players.every(p => typeof p.rating === 'number'));
+
+  console.log('▶ FASE 2: UBICACIÓN / MAPA');
+  const locBad = await jfetch(`/api/players/${A}/location`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: 999, lng: 0, shared: true }) });
+  ok('ubicación inválida → 400', locBad.status === 400);
+  const loc = await jfetch(`/api/players/${A}/location`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: -27.45, lng: -58.83, shared: true }) });
+  ok('ubicación compartida OK', loc.status === 200 && loc.body.location && loc.body.location.shared === true && loc.body.location.lat === -27.45);
+  const map = (await jfetch(`/api/map/${B}`)).body;
+  ok('mapa incluye a A con coords', map && Array.isArray(map.players) && map.players.some(p => p.id === A && p.lat === -27.45));
+  ok('mapa no incluye al viewer', map && !map.players.some(p => p.id === B));
+  ok('mapa spots es array', map && Array.isArray(map.spots));
+  const locOff = await jfetch(`/api/players/${A}/location`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shared: false }) });
+  ok('ubicación se puede desactivar', locOff.status === 200 && locOff.body.location && locOff.body.location.shared === false);
+  const map2 = (await jfetch(`/api/map/${B}`)).body;
+  ok('A ya no aparece en el mapa', map2 && !map2.players.some(p => p.id === A));
+
   await finish();
 }
 

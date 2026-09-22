@@ -1,6 +1,6 @@
 {
   "name": "padel-match",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "App para encontrar dupla de pádel con sistema de invitaciones y penalizaciones",
   "main": "server.js",
   "scripts": {
