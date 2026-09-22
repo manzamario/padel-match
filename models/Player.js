@@ -17,6 +17,9 @@ const playerSchema = new mongoose.Schema({
   rating: { type: Number, default: 1500 },
   points: { type: Number, default: 0 },
   achievements: { type: [String], default: [] },
+  plan: { type: String, enum: ['free', 'premium'], default: 'free' },
+  planExpiresAt: { type: Date, default: null },
+  planStartedAt: { type: Date, default: null },
   location: {
     lat: { type: Number, default: null },
     lng: { type: Number, default: null },

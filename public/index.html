@@ -215,6 +215,12 @@
     .profile-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
     .profile-value { font-size: 0.95rem; font-weight: 500; }
     .profile-edit { display: flex; gap: 8px; align-items: center; }
+    .crown-badge { display:inline-flex; align-items:center; gap:4px; background:linear-gradient(135deg,#ffd700,#ffa502); color:#1a1a00; font-size:0.65rem; font-weight:800; padding:3px 8px; border-radius:100px; letter-spacing:0.3px; }
+    .premium-cta { background: linear-gradient(135deg, rgba(255,215,0,0.15), rgba(255,165,2,0.08)); border:1px solid rgba(255,215,0,0.35); }
+    .plan-card { background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:10px; }
+    .plan-card.best { border-color:rgba(255,215,0,0.5); background:rgba(255,215,0,0.06); }
+    .plan-price { font-size:1.3rem; font-weight:800; color:var(--green); }
+    .plan-tag { font-size:0.6rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:#ffd700; }
 
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes slideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
@@ -450,6 +456,16 @@
           <div id="statusCard" class="status-card"></div>
 
           <div class="profile-card" style="margin-bottom:12px;" id="miniProfile"></div>
+
+          <div id="premiumBanner" class="premium-cta" style="display:none;border-radius:14px;padding:12px 14px;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+              <div>
+                <div style="font-weight:700;font-size:0.85rem;">👑 Pasate a Premium</div>
+                <div style="font-size:0.72rem;color:var(--muted);" id="premiumBannerSub">Invitaciones y boxes ilimitadas</div>
+              </div>
+              <button class="btn btn-sm btn-primary" style="width:auto;" id="openPremiumBtn">Ver planes</button>
+            </div>
+          </div>
 
           <div class="tabs" style="margin-bottom:8px;">
             <button class="tab active" data-tab="invitationsTab">Recibidas <span id="invTabCount" class="hidden badge" style="margin-left:4px;font-size:0.6rem;padding:1px 6px;"></span></button>
@@ -728,6 +744,24 @@
     </div>
   </div>
 
+  <!-- PREMIUM MODAL -->
+  <div id="premiumModal" class="modal-overlay hidden">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">👑 Padel Match Premium</div>
+      <div class="modal-sub" id="premiumModalSub">Desbloqueá todo el potencial de la app.</div>
+      <div id="premiumPlans"><div class="empty-state">Cargando planes...</div></div>
+      <div style="font-size:0.7rem;color:var(--muted);margin-top:6px;line-height:1.4;">
+        Free: 10 invitaciones/mes · 1 box activa · 1 aviso Busco 4to.<br/>
+        Premium: todo ilimitado, badge 👑 y prioridad en listados. Pago con MercadoPago.
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="premiumCloseBtn">Cerrar</button>
+      </div>
+      <div id="premiumModalMsg" class="msg" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
   <!-- CREAR BOX MODAL -->
   <div id="boxModal" class="modal-overlay hidden">
     <div class="modal-sheet">
@@ -780,6 +814,20 @@
     </div>
   </div>
 
+  <!-- PREMIUM MODAL -->
+  <div id="premiumModal" class="modal-overlay hidden">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">⭐ Padel Match Premium</div>
+      <div class="modal-sub">Invitaciones y boxes sin límites, badge en tu perfil y prioridad en listados.</div>
+      <div id="premiumBody"><div class="empty-state">Cargando planes...</div></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="premiumCancelBtn">Cerrar</button>
+      </div>
+      <div id="premiumModalMsg" class="msg" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
   <!-- PERFIL PÚBLICO (?p=id) -->
   <div id="publicProfileScreen" class="hidden">
     <div class="top-bar">
@@ -824,13 +872,26 @@
 
   <script>
     const API = window.location.origin;
-    const APP_VERSION = '2.6.0';
+    const APP_VERSION = '2.7.0';
     let myPlayerId = localStorage.getItem('padel_myId');
     const CATS = { '8':'8 - Principiante','7':'7 - Baja','6':'6 - Media-Baja','5':'5 - Media','4':'4 - Media-Alta','3':'3 - Alta','2':'2 - Muy Alta','1':'1 - Profesional' };
 
     async function init() {
       document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
       loadAchievementCatalog();
+      const qs = new URLSearchParams(location.search);
+      if (qs.get('p')) {
+        showPublicProfile(qs.get('p'));
+        return;
+      }
+      if (qs.get('premium') === 'ok' && myPlayerId) {
+        try {
+          const pid = qs.get('payment_id');
+          if (pid) await fetch(`${API}/api/payments/confirm?payment_id=${encodeURIComponent(pid)}&player_id=${encodeURIComponent(myPlayerId)}`);
+        } catch {}
+        history.replaceState({}, '', '/');
+        alert('¡Pago recibido! Tu Premium se activó.');
+      }
       // PWA: registrar service worker (necesario para notificaciones push y offline)
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -1088,7 +1149,7 @@
         return `<div class="player-item" style="cursor:pointer;" onclick="toggleSelect('${p.id}')">
           <div style="display:flex;align-items:center;padding-right:8px;"><input type="checkbox" class="player-check" data-id="${p.id}" ${checked} onclick="event.stopPropagation();toggleSelect('${p.id}')" style="width:18px;height:18px;accent-color:var(--green);" /></div>
           <div class="player-info">
-            <div class="player-row"><span class="status-dot online"></span><span class="p-name" onclick="event.stopPropagation();openProfileModal('${p.id}')" style="text-decoration:underline;text-decoration-color:transparent;" onmouseover="this.style.textDecorationColor='var(--green)'" onmouseout="this.style.textDecorationColor='transparent'">${esc(p.name)}</span>${compatHtml}</div>
+            <div class="player-row"><span class="status-dot online"></span><span class="p-name" onclick="event.stopPropagation();openProfileModal('${p.id}')" style="text-decoration:underline;text-decoration-color:transparent;" onmouseover="this.style.textDecorationColor='var(--green)'" onmouseout="this.style.textDecorationColor='transparent'">${esc(p.name)}</span>${p.plan === 'premium' ? '<span class="crown-badge" style="margin-left:4px;">👑</span>' : ''}${compatHtml}</div>
             <div class="player-row" style="gap:6px;flex-wrap:wrap;"><span class="p-tag">${CATS[p.category]||'Sin categoría'}</span><span class="p-phone">${esc(p.phone)}</span>${typeof p.rating === 'number' ? `<span class="p-phone">${Math.round(p.rating)} Elo</span>` : ''}</div>
           </div>
           <div class="p-actions" style="flex-shrink:0;">
@@ -1791,7 +1852,7 @@ Padel Match - buscá tu dupla ideal`;
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
           <span class="status-dot ${dot}" style="width:10px;height:10px;"></span>
           <div>
-            <div style="font-weight:700;font-size:1.1rem;">${esc(p.name)}${p.isMe ? ' <span class="p-tag">VOS</span>' : ''}</div>
+            <div style="font-weight:700;font-size:1.1rem;">${esc(p.name)}${p.isMe ? ' <span class="p-tag">VOS</span>' : ''}${p.plan === 'premium' ? ' <span class="p-tag" style="background:rgba(255,165,2,0.2);color:var(--amber);">⭐ PREMIUM</span>' : ''}</div>
             <div style="font-size:0.78rem;color:var(--muted);">${cats[p.category] || p.category} · ${status}${p.rank ? ` · Ladder #${p.rank}` : ''}</div>
           </div>
         </div>
@@ -1806,7 +1867,11 @@ Padel Match - buscá tu dupla ideal`;
           <div class="stat"><b>${streakTxt}</b>Racha</div>
         </div>
         ${badges ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">${badges}</div>` : ''}
-        ${!isPublicView && p.id === myPlayerId ? `<div style="margin-top:12px;"><button class="btn btn-sm btn-ghost" onclick="shareProfile('${p.id}')">🔗 Compartir mi perfil</button></div>` : ''}
+        ${!isPublicView && p.id === myPlayerId ? `
+          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+            <button class="btn btn-sm btn-ghost" onclick="shareProfile('${p.id}')">🔗 Compartir mi perfil</button>
+            <button class="btn btn-sm btn-primary" onclick="openPremiumModal()">⭐ Premium</button>
+          </div>` : ''}
         <div style="font-size:0.85rem;font-weight:600;margin-top:16px;margin-bottom:4px;">Últimos partidos</div>
         ${matchRows}
         ${leagueRows ? `<div style="font-size:0.85rem;font-weight:600;margin-top:16px;margin-bottom:4px;">Boxes</div>${leagueRows}` : ''}
@@ -1814,6 +1879,117 @@ Padel Match - buscá tu dupla ideal`;
     }
 
     let profileShareId = null;
+    let _mySub = null;
+
+    async function loadSubscription() {
+      if (!myPlayerId) return;
+      try {
+        const sub = await (await fetch(`${API}/api/subscription/${myPlayerId}`)).json();
+        _mySub = sub;
+        const banner = document.getElementById('premiumBanner');
+        const subEl = document.getElementById('premiumBannerSub');
+        const btn = document.getElementById('premiumBannerBtn');
+        if (!banner) return;
+        if (sub && sub.premium) {
+          banner.classList.remove('hidden');
+          if (subEl) {
+            const exp = sub.planExpiresAt ? new Date(sub.planExpiresAt).toLocaleDateString('es-AR') : '';
+            subEl.textContent = exp ? `Activo hasta ${exp}` : 'Activo';
+          }
+          if (btn) { btn.textContent = 'Ver plan'; btn.onclick = () => openPremiumModal(); }
+        } else if (sub) {
+          const left = sub.usage && sub.usage.invitationsLeft;
+          if (left !== null && left !== undefined && left <= 3) {
+            banner.classList.remove('hidden');
+            if (subEl) subEl.textContent = `Te quedan ${left} invitaciones este mes`;
+            if (btn) { btn.textContent = 'Premium'; btn.onclick = () => openPremiumModal(); }
+          } else {
+            banner.classList.add('hidden');
+          }
+        }
+      } catch {}
+    }
+
+    async function openPremiumModal() {
+      const body = document.getElementById('premiumBody');
+      const msg = document.getElementById('premiumModalMsg');
+      msg.className = 'msg';
+      document.getElementById('premiumModal').classList.remove('hidden');
+      body.innerHTML = `
+        <div style="font-size:0.82rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">
+          ✅ Invitaciones ilimitadas<br/>
+          ✅ Boxes "Box League" ilimitadas<br/>
+          ✅ Pizarra "Busco 4to" sin límite<br/>
+          ✅ Badge 👑 en tu perfil y listados<br/>
+          ✅ Prioridad en la lista de jugadores
+        </div>
+        <div id="premiumPlans"><div class="empty-state">Cargando...</div></div>
+      `;
+      try {
+        if (!myPlayerId) { body.innerHTML = '<div class="empty-state">Ingresá a la app para suscribirte</div>'; return; }
+        const sub = await (await fetch(`${API}/api/subscription/${myPlayerId}`)).json();
+        _mySub = sub;
+        if (sub.premium) {
+          const exp = sub.planExpiresAt ? new Date(sub.planExpiresAt).toLocaleDateString('es-AR') : '—';
+          body.innerHTML = `<div style="text-align:center;padding:16px 0;">
+            <div style="font-size:2rem;">⭐</div>
+            <div style="font-weight:700;">Sos Premium</div>
+            <div style="font-size:0.85rem;color:var(--muted);">Vence: ${exp}</div>
+          </div>`;
+          return;
+        }
+        const plans = sub.plans || [];
+        document.getElementById('premiumPlans').innerHTML = plans.map(p => `
+          <button class="btn ${p.code === '1m' ? 'btn-primary' : 'btn-ghost'}" style="margin-bottom:8px;" data-plan="${p.code}">
+            ${p.label} — $${Number(p.amount).toLocaleString('es-AR')}
+          </button>
+        `).join('');
+        document.querySelectorAll('[data-plan]').forEach(el => {
+          el.addEventListener('click', () => startCheckout(el.dataset.plan, el));
+        });
+      } catch {
+        body.innerHTML = '<div class="empty-state">Error al cargar planes</div>';
+      }
+    }
+
+    async function startCheckout(planCode, btn) {
+      const msg = document.getElementById('premiumModalMsg');
+      if (btn) { btn.disabled = true; btn.textContent = 'Procesando...'; }
+      try {
+        const r = await fetch(`${API}/api/payments/checkout`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: myPlayerId, planCode })
+        });
+        const d = await r.json();
+        if (!r.ok) {
+          msg.className = 'msg show error';
+          msg.textContent = d.error || 'No se pudo iniciar el pago';
+          if (btn) { btn.disabled = false; btn.textContent = 'Elegir'; }
+          return;
+        }
+        if (d.test && d.plan) {
+          _mySub = d.plan;
+          msg.className = 'msg show show';
+          msg.className = 'msg show';
+          msg.textContent = '¡Premium activado!';
+          document.getElementById('premiumModal').classList.add('hidden');
+          loadSubscription();
+          loadApp();
+          return;
+        }
+        if (d.init_point) {
+          window.location.href = d.init_point;
+          return;
+        }
+        msg.className = 'msg show error';
+        msg.textContent = 'Pagos no disponibles aún';
+      } catch {
+        msg.className = 'msg show error';
+        msg.textContent = 'Error de conexión';
+        if (btn) { btn.disabled = false; btn.textContent = 'Elegir'; }
+      }
+    }
+
     async function openProfileModal(playerId) {
       if (!playerId) return;
       profileShareId = playerId;
@@ -1846,6 +2022,123 @@ Padel Match - buscá tu dupla ideal`;
       } catch {
         prompt('Copiá el enlace de tu perfil:', url);
       }
+    }
+
+    // ─── PREMIUM / FREEMIUM ───
+    let _subscription = null;
+
+    async function loadSubscription() {
+      if (!myPlayerId) return null;
+      try {
+        const r = await fetch(`${API}/api/billing/subscription/${myPlayerId}`);
+        if (!r.ok) return null;
+        _subscription = await r.json();
+        renderPremiumBanner(_subscription);
+        return _subscription;
+      } catch { return null; }
+    }
+
+    function renderPremiumBanner(sub) {
+      const banner = document.getElementById('premiumBanner');
+      const btn = document.getElementById('openPremiumBtn');
+      if (!banner) return;
+      if (!sub) { banner.style.display = 'none'; return; }
+      if (sub.premium) {
+        banner.style.display = 'none';
+        const mp = document.getElementById('miniProfile');
+        if (mp && !mp.querySelector('.crown-badge')) {
+          mp.insertAdjacentHTML('afterbegin', '<div style="margin-bottom:8px;"><span class="crown-badge">👑 PREMIUM</span></div>');
+        }
+        return;
+      }
+      banner.style.display = 'block';
+      const left = sub.usage && sub.usage.invitationsLeft;
+      const subEl = document.getElementById('premiumBannerSub');
+      if (subEl) subEl.textContent = left != null ? `Te quedan ${left} invitaciones este mes` : 'Invitaciones y boxes ilimitadas';
+      if (btn) btn.onclick = openPremiumModal;
+    }
+
+    async function openPremiumModal() {
+      const modal = document.getElementById('premiumModal');
+      const plansEl = document.getElementById('premiumPlans');
+      const msg = document.getElementById('premiumModalMsg');
+      if (msg) { msg.className = 'msg'; msg.textContent = ''; }
+      modal.classList.remove('hidden');
+      plansEl.innerHTML = '<div class="empty-state">Cargando planes...</div>';
+      try {
+        const sub = _subscription || await loadSubscription();
+        if (!sub) { plansEl.innerHTML = '<div class="empty-state">No se pudo cargar</div>'; return; }
+        document.getElementById('premiumModalSub').textContent = sub.premium
+          ? `Activo hasta ${sub.planExpiresAt ? new Date(sub.planExpiresAt).toLocaleDateString('es-AR') : '—'}`
+          : 'Elegí tu plan y pagá con MercadoPago (tarjeta, débito o transferencia).';
+        if (sub.premium) {
+          plansEl.innerHTML = '<div class="empty-state" style="color:var(--green);">Ya sos Premium 👑</div>';
+          return;
+        }
+        plansEl.innerHTML = (sub.plans || []).map(p => `
+          <div class="plan-card ${p.code === '3m' ? 'best' : ''}">
+            ${p.code === '3m' ? '<div class="plan-tag">Más elegido</div>' : ''}
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+              <div>
+                <div style="font-weight:700;font-size:0.95rem;">${p.label}</div>
+                <div style="font-size:0.7rem;color:var(--muted);">${p.description}</div>
+              </div>
+              <div style="text-align:right;">
+                <div class="plan-price">$${Number(p.amount).toLocaleString('es-AR')}</div>
+                <button class="btn btn-sm btn-primary" style="width:auto;margin-top:6px;" onclick="startCheckout('${p.code}')">Pagar</button>
+              </div>
+            </div>
+          </div>
+        `).join('') || '<div class="empty-state">Sin planes</div>';
+      } catch {
+        plansEl.innerHTML = '<div class="empty-state">Error al cargar planes</div>';
+      }
+    }
+
+    async function startCheckout(planCode) {
+      const msg = document.getElementById('premiumModalMsg');
+      if (!msg) return;
+      if (!myPlayerId) { msg.className = 'msg show error'; msg.textContent = 'Ingresá a la app primero'; return; }
+      msg.className = 'msg show'; msg.textContent = 'Preparando pago...';
+      try {
+        const r = await fetch(`${API}/api/billing/checkout`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: myPlayerId, planCode })
+        });
+        const d = await r.json();
+        if (!r.ok) {
+          msg.className = 'msg show error';
+          msg.textContent = d.error || 'Error al iniciar el pago';
+          return;
+        }
+        if (d.initPoint) {
+          window.location.href = d.initPoint;
+          return;
+        }
+        msg.className = 'msg show error';
+        msg.textContent = d.error || 'Pago no disponible';
+      } catch {
+        msg.className = 'msg show error';
+        msg.textContent = 'Error de conexión';
+      }
+    }
+
+    async function handlePremiumReturn() {
+      const q = new URLSearchParams(window.location.search);
+      const flag = q.get('premium');
+      if (!flag) return;
+      const paymentId = q.get('payment_id') || q.get('collection_id');
+      if (flag === 'ok' && paymentId && myPlayerId) {
+        try {
+          await fetch(`${API}/api/billing/confirm?payment_id=${encodeURIComponent(paymentId)}&playerId=${encodeURIComponent(myPlayerId)}`);
+        } catch {}
+      }
+      const hist = window.location.pathname + window.location.search.replace(/[?&]premium=[^&]*/g, '').replace(/^&/, '?').replace(/\?$/, '');
+      try { history.replaceState(null, '', hist || '/'); } catch {}
+      await loadSubscription();
+      if (flag === 'ok') alert('¡Pago recibido! Ya sos Premium 👑');
+      else if (flag === 'fail') alert('El pago no se pudo completar.');
+      else if (flag === 'pending') alert('Pago en proceso. Te activamos Premium cuando se acredite.');
     }
 
     // ─── BOX LEAGUE ───
@@ -2089,6 +2382,9 @@ Padel Match - buscá tu dupla ideal`;
 
     document.getElementById('seekCancelBtn').addEventListener('click', () => document.getElementById('seekModal').classList.add('hidden'));
     document.getElementById('seekModal').addEventListener('click', function(e) { if (e.target === this) this.classList.add('hidden'); });
+    document.getElementById('premiumCancelBtn').addEventListener('click', () => document.getElementById('premiumModal').classList.add('hidden'));
+    document.getElementById('premiumModal').addEventListener('click', function(e) { if (e.target === this) this.classList.add('hidden'); });
+    document.getElementById('premiumBannerBtn').addEventListener('click', () => openPremiumModal());
     document.getElementById('seekPublishBtn').addEventListener('click', async () => {
       const date = document.getElementById('seekDate').value;
       const time = document.getElementById('seekTime').value;
@@ -2125,6 +2421,10 @@ Padel Match - buscá tu dupla ideal`;
 
     document.getElementById('profileCloseBtn').addEventListener('click', () => document.getElementById('profileModal').classList.add('hidden'));
     document.getElementById('profileModal').addEventListener('click', function(e) { if (e.target === this) this.classList.add('hidden'); });
+    const premiumClose = document.getElementById('premiumCloseBtn');
+    if (premiumClose) premiumClose.addEventListener('click', () => document.getElementById('premiumModal').classList.add('hidden'));
+    const premiumModalEl = document.getElementById('premiumModal');
+    if (premiumModalEl) premiumModalEl.addEventListener('click', function(e) { if (e.target === this) this.classList.add('hidden'); });
     document.getElementById('profileShareBtn').addEventListener('click', () => { if (profileShareId) shareProfile(profileShareId); });
     document.getElementById('publicProfileBackBtn').addEventListener('click', () => {
       window.location.href = window.location.origin;

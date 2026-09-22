@@ -7,6 +7,7 @@ const PushSubscription = require('./models/PushSubscription');
 const Match = require('./models/Match');
 const League = require('./models/League');
 const SeekingPost = require('./models/SeekingPost');
+const Payment = require('./models/Payment');
 
 const DEFAULT_RULES = [
   '1. DISPONIBILIDAD OBLIGATORIA: Todo jugador debe mantener actualizado su estado de disponibilidad (disponible/no disponible) en todo momento. Aparecer como "disponible" implica compromiso a responder invitaciones en tiempo y forma.',
@@ -805,6 +806,7 @@ async function buildAppSummary(playerId) {
   ]);
   const stats = { ...emptyStats(), ...(matchStats[playerId] || {}), ...(invStats[playerId] || {}) };
   stats.pendingMatches = matches.filter(m => m.status === 'pending').length;
+  const sub = await getSubscription(playerId).catch(() => null);
   const myLadder = ladder.find(r => r.id === playerId) || null;
   const myRank = myLadder ? myLadder.rank : null;
   const reputation = myLadder ? myLadder.reputation : computeReputation(stats, meObj.warnings || 0, meObj.rejections || 0);
@@ -829,18 +831,26 @@ async function buildAppSummary(playerId) {
       const otherStats = statsFor(p._id.toString());
       const compat = computeCompat(meObj, p, stats, otherStats);
       const lad = ladderById.get(p._id.toString());
+      const planPremium = p.plan === 'premium' && (!p.planExpiresAt || p.planExpiresAt > new Date());
       return {
         ...p,
         id: p._id.toString(),
+        plan: planPremium ? 'premium' : 'free',
         compat,
         rating: lad ? lad.rating : (typeof p.rating === 'number' ? p.rating : ELO_BASE),
         points: lad ? lad.points : (p.points || 0),
         reputation: lad ? lad.reputation : null,
         rank: lad ? lad.rank : null
       };
+    })
+    .sort((a, b) => {
+      const ap = a.plan === 'premium' ? 1 : 0;
+      const bp = b.plan === 'premium' ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+      return String(a.name).localeCompare(String(b.name));
     });
   return {
-    me: { ...meObj, id: meObj._id.toString(), gamification },
+    me: { ...meObj, id: meObj._id.toString(), gamification, plan: sub ? sub.plan : 'free', subscription: sub },
     players,
     pending,
     sent,
@@ -849,7 +859,8 @@ async function buildAppSummary(playerId) {
     matches,
     stats,
     ladder: ladder.slice(0, 100),
-    gamification
+    gamification,
+    subscription: sub
   };
 }
 
@@ -896,7 +907,218 @@ async function getAdminStats() {
   const pendingInvitations = await Invitation.countDocuments({ status: 'pending' });
   const totalInvitations = await Invitation.countDocuments();
   const warnedPlayers = await Player.countDocuments({ warnings: { $gt: 0 } });
-  return { totalPlayers, activePlayers, suspendedPlayers, pendingInvitations, totalInvitations, warnedPlayers };
+  const premiumPlayers = await Player.countDocuments({ plan: 'premium', planExpiresAt: { $gt: new Date() } });
+  const paid = await Payment.aggregate([
+    { $match: { status: 'approved' } },
+    { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
+  ]);
+  return {
+    totalPlayers, activePlayers, suspendedPlayers, pendingInvitations, totalInvitations, warnedPlayers,
+    premiumPlayers,
+    revenue: paid[0] ? paid[0].total : 0,
+    paidOrders: paid[0] ? paid[0].count : 0
+  };
+}
+
+// --- FREEMIUM / PLANES ---
+const FREE_LIMITS = {
+  invitationsPerMonth: 10,
+  activeBoxes: 1,
+  openSeekingPosts: 1
+};
+
+const PLAN_CATALOG = {
+  '1m': { months: 1, label: 'Premium 1 mes', description: 'Invitaciones y boxes ilimitadas, badge 👑 y prioridad en listados.' },
+  '3m': { months: 3, label: 'Premium 3 meses', description: 'Todo lo de Premium con 3 meses de acceso.' },
+  '12m': { months: 12, label: 'Premium 1 año', description: 'Todo lo de Premium con 12 meses (mejor precio).' }
+};
+
+function planAmounts() {
+  return {
+    '1m': Number(process.env.PREMIUM_PRICE_1M || 3999),
+    '3m': Number(process.env.PREMIUM_PRICE_3M || 9999),
+    '12m': Number(process.env.PREMIUM_PRICE_12M || 29999)
+  };
+}
+
+async function refreshPremiumExpiry(playerDoc) {
+  if (!playerDoc) return playerDoc;
+  if (playerDoc.plan === 'premium' && playerDoc.planExpiresAt && playerDoc.planExpiresAt <= new Date()) {
+    playerDoc.plan = 'free';
+    playerDoc.planExpiresAt = null;
+    await playerDoc.save();
+  }
+  return playerDoc;
+}
+
+async function isPremiumPlayer(playerId) {
+  const p = await Player.findById(playerId);
+  if (!p) return false;
+  await refreshPremiumExpiry(p);
+  return p.plan === 'premium';
+}
+
+async function getSubscription(playerId) {
+  const p = await Player.findById(playerId);
+  if (!p) return null;
+  await refreshPremiumExpiry(p);
+  const premium = p.plan === 'premium';
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const sentThisMonth = premium ? 0 : await Invitation.countDocuments({
+    fromPlayer: String(playerId),
+    createdAt: { $gte: monthStart }
+  });
+  const activeBoxes = await League.countDocuments({ createdBy: String(playerId), status: 'active' });
+  const openSeeking = await SeekingPost.countDocuments({ playerId: String(playerId), status: 'open' });
+  const amounts = planAmounts();
+  return {
+    plan: premium ? 'premium' : 'free',
+    premium,
+    planExpiresAt: premium ? p.planExpiresAt : null,
+    limits: FREE_LIMITS,
+    usage: {
+      invitationsSentThisMonth: premium ? null : sentThisMonth,
+      invitationsLeft: premium ? null : Math.max(0, FREE_LIMITS.invitationsPerMonth - sentThisMonth),
+      activeBoxes,
+      boxesLeft: premium ? null : Math.max(0, FREE_LIMITS.activeBoxes - activeBoxes),
+      openSeeking,
+      seekingLeft: premium ? null : Math.max(0, FREE_LIMITS.openSeekingPosts - openSeeking)
+    },
+    plans: Object.keys(PLAN_CATALOG).map(code => ({
+      code,
+      months: PLAN_CATALOG[code].months,
+      label: PLAN_CATALOG[code].label,
+      description: PLAN_CATALOG[code].description,
+      amount: amounts[code],
+      currency: 'ARS'
+    }))
+  };
+}
+
+async function checkCanInvite(playerId) {
+  const sub = await getSubscription(playerId);
+  if (!sub) return { ok: false, error: 'Jugador no encontrado' };
+  if (sub.premium) return { ok: true, sub };
+  if (sub.usage.invitationsLeft <= 0) {
+    return {
+      ok: false,
+      error: `Alcanzaste el límite free de ${FREE_LIMITS.invitationsPerMonth} invitaciones este mes. Pasate a Premium para enviar ilimitadas.`,
+      code: 'LIMIT_INVITES',
+      sub
+    };
+  }
+  return { ok: true, sub };
+}
+
+async function activatePremium(playerId, months, paymentInfo) {
+  const p = await Player.findById(playerId);
+  if (!p) return { error: 'Jugador no encontrado' };
+  const now = new Date();
+  let base = now;
+  if (p.plan === 'premium' && p.planExpiresAt && p.planExpiresAt > now) {
+    base = new Date(p.planExpiresAt);
+  }
+  const expires = new Date(base.getTime());
+  expires.setMonth(expires.getMonth() + months);
+  p.plan = 'premium';
+  if (!p.planStartedAt) p.planStartedAt = now;
+  p.planExpiresAt = expires;
+  await p.save();
+  if (paymentInfo && paymentInfo.paymentId) {
+    await Payment.findOneAndUpdate(
+      { paymentId: String(paymentInfo.paymentId) },
+      { $set: { status: 'approved', activatedAt: now, statusDetail: paymentInfo.statusDetail || 'approved' } }
+    );
+  }
+  return { plan: 'premium', planExpiresAt: expires };
+}
+
+async function createOrGetPayment(playerId, planCode) {
+  const meta = PLAN_CATALOG[planCode];
+  if (!meta) return { error: 'Plan inválido' };
+  const p = await Player.findById(playerId);
+  if (!p || !p.isComplete) return { error: 'Jugador no encontrado' };
+  const payment = await Payment.create({
+    _id: makeId('pay'),
+    playerId: String(playerId),
+    planCode,
+    amount: planAmounts()[planCode],
+    status: 'pending'
+  });
+  return { payment: payment.toObject(), plan: meta, amount: payment.amount };
+}
+
+async function markPaymentApproved(paymentId, raw, statusDetail) {
+  const pay = await Payment.findOne({ paymentId: String(paymentId) });
+  if (!pay) return null;
+  if (pay.status === 'approved') return pay;
+  pay.status = 'approved';
+  pay.statusDetail = statusDetail || 'approved';
+  pay.raw = raw || null;
+  pay.activatedAt = new Date();
+  await pay.save();
+  const meta = PLAN_CATALOG[pay.planCode];
+  await activatePremium(pay.playerId, meta ? meta.months : 1, { paymentId: pay.paymentId, statusDetail: pay.statusDetail });
+  return pay;
+}
+
+async function handleMercadoPagoWebhook(body) {
+  try {
+    if (!body || body.type !== 'payment' || !body.data || !body.data.id) return { ok: true, ignored: true };
+    const paymentId = String(body.data.id);
+    const token = process.env.MP_ACCESS_TOKEN;
+    if (!token) return { ok: false, reason: 'MP no configurado' };
+    const resp = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!resp.ok) return { ok: false, reason: 'payment fetch failed' };
+    const payment = await resp.json();
+    const ext = String(payment.external_reference || '');
+    let pay = await Payment.findOne({ paymentId });
+    if (!pay && ext.startsWith('premium:')) {
+      const parts = ext.split(':');
+      const pid = parts[2];
+      if (pid) {
+        pay = await Payment.findOne({ playerId: pid, status: 'pending' }).sort({ createdAt: -1 });
+        if (pay) { pay.paymentId = paymentId; await pay.save(); }
+      }
+    }
+    if (payment.status === 'approved') {
+      await markPaymentApproved(paymentId, payment, payment.status_detail || 'approved');
+      return { ok: true, activated: true };
+    }
+    if (pay && (payment.status === 'cancelled' || payment.status === 'rejected')) {
+      pay.status = payment.status;
+      pay.statusDetail = payment.status_detail || payment.status;
+      pay.raw = payment;
+      await pay.save();
+    }
+    return { ok: true, activated: false, status: payment.status };
+  } catch (e) {
+    console.error('MP webhook error:', e.message);
+    return { ok: false, reason: e.message };
+  }
+}
+
+async function confirmPaymentFromReturn(paymentId, playerId) {
+  const token = process.env.MP_ACCESS_TOKEN;
+  if (!token || !paymentId) return { ok: false, error: 'No se pudo verificar el pago' };
+  const resp = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!resp.ok) return { ok: false, error: 'Pago no encontrado en MercadoPago' };
+  const payment = await resp.json();
+  if (payment.status !== 'approved') return { ok: false, error: 'Pago aún no aprobado', status: payment.status };
+  let pay = await Payment.findOne({ paymentId: String(paymentId) });
+  if (!pay && playerId) {
+    pay = await Payment.findOne({ playerId, status: 'pending' }).sort({ createdAt: -1 });
+    if (pay) { pay.paymentId = String(paymentId); await pay.save(); }
+  }
+  if (!pay) return { ok: false, error: 'Pago no registrado' };
+  await markPaymentApproved(String(paymentId), payment, payment.status_detail || 'approved');
+  return { ok: true, plan: await getSubscription(pay.playerId) };
 }
 
 // --- FASE 3: BOX LEAGUE ---
@@ -996,6 +1218,13 @@ async function serializeLeague(league, viewerId) {
 async function createLeague(name, createdBy, playerIds) {
   const displayName = (name || '').toString().trim().slice(0, 80);
   if (!displayName) return { error: 'La liga necesita un nombre' };
+  const creatorPremium = await isPremiumPlayer(createdBy);
+  if (!creatorPremium) {
+    const active = await League.countDocuments({ createdBy: String(createdBy), status: 'active' });
+    if (active >= FREE_LIMITS.activeBoxes) {
+      return { error: `El plan free permite ${FREE_LIMITS.activeBoxes} box activa. Pasate a Premium para tener box ilimitadas.` , code: 'LIMIT_BOXES' };
+    }
+  }
   const members = [];
   const pending = new Set([String(createdBy), ...(Array.isArray(playerIds) ? playerIds : []).map(x => String(x))]);
   for (const pid of pending) {
@@ -1094,6 +1323,13 @@ async function deleteLeague(leagueId, byPlayerId) {
 async function createSeekingPost(playerId, { date, time, court, note, level }) {
   const p = await Player.findById(playerId);
   if (!p) return { error: 'Jugador no encontrado' };
+  const premium = await isPremiumPlayer(playerId);
+  if (!premium) {
+    const open = await SeekingPost.countDocuments({ playerId: String(playerId), status: 'open' });
+    if (open >= FREE_LIMITS.openSeekingPosts) {
+      return { error: 'El plan free permite 1 publicación abierta a la vez. Pasate a Premium para publicar más.', code: 'LIMIT_SEEKING' };
+    }
+  }
   const post = await SeekingPost.create({
     _id: makeId('sp'),
     playerId: String(playerId),
@@ -1111,11 +1347,13 @@ async function createSeekingPost(playerId, { date, time, court, note, level }) {
 async function serializeSeeking(post) {
   const owner = await Player.findById(post.playerId).lean();
   const joiners = await Player.find({ _id: { $in: post.joinedBy || [] } }).lean();
+  const ownerPlan = owner && owner.plan === 'premium' && (!owner.planExpiresAt || owner.planExpiresAt > new Date()) ? 'premium' : 'free';
   return {
     id: post._id,
     playerId: post.playerId,
     playerName: owner ? owner.name : '?',
     playerCategory: owner ? owner.category : '',
+    playerPlan: ownerPlan,
     date: post.date || '',
     time: post.time || '',
     court: post.court || '',
@@ -1227,6 +1465,8 @@ module.exports = {
   createLeague, getLeagueById, getLeaguesForPlayer, addLeaguePlayer, registerLeagueResult, finishLeague, deleteLeague,
   createSeekingPost, getSeekingPosts, getSeekingPostById, joinSeekingPost, closeSeekingPost, deleteSeekingPost,
   getPlayerProfile,
+  FREE_LIMITS, getSubscription, checkCanInvite, isPremiumPlayer, createOrGetPayment, activatePremium,
+  markPaymentApproved, handleMercadoPagoWebhook, confirmPaymentFromReturn, planAmounts, PLAN_CATALOG,
   savePushSubscription, removePushSubscription, getPushSubscriptions,
   getAllPlayersFull, adminSuspendPlayer, adminUnsuspendPlayer, adminAddWarning,
   updateRule, getAdminStats

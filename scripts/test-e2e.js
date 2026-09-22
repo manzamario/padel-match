@@ -274,6 +274,26 @@ async function main() {
   const prof404 = await jfetch('/api/players/no-existe/profile');
   ok('perfil inexistente → 404', prof404.status === 404);
 
+  console.log('▶ FREEMIUM / PREMIUM');
+  const subA = (await jfetch(`/api/subscription/${A}`)).body;
+  ok('subscription free con límites', subA && subA.plan === 'free' && subA.limits && subA.limits.invitationsPerMonth === 10);
+  ok('subscription trae planes', Array.isArray(subA.plans) && subA.plans.length >= 1 && subA.plans[0].amount > 0);
+  ok('subscription usage invitaciones usadas >= 1', subA.usage.invitationsSentThisMonth >= 1);
+
+  const co = await jfetch('/api/payments/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: A, planCode: '1m' }) });
+  ok('checkout test activa premium', co.status === 200 && co.body && co.body.plan && co.body.plan.premium === true, co.body);
+  const subA2 = (await jfetch(`/api/subscription/${A}`)).body;
+  ok('A ahora premium', subA2.premium === true && subA2.plan === 'premium');
+
+  const box2 = await jfetch('/api/leagues', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Box Premium', createdBy: A, playerIds: [B, C] }) });
+  ok('premium puede crear 2da box', box2.status === 201, box2.body);
+
+  const subD = (await jfetch(`/api/subscription/${D}`)).body;
+  ok('D sigue free', subD.plan === 'free');
+
+  const badPlan = await jfetch('/api/payments/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: D, planCode: 'xx' }) });
+  ok('plan inválido → 400', badPlan.status === 400);
+
   await finish();
 }
 
